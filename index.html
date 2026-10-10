@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Switchback">
@@ -694,9 +694,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
   --easy:#6cc48c; --mod:#79a9e6; --hard:#ef7d70; --rain:#6fa8d6; --bad:#ef7d70;
   --shadow:0 6px 24px rgba(0,0,0,.5); color-scheme:dark}}
 *{box-sizing:border-box}
-html,body{margin:0;height:100%}
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none}
+html{position:fixed;inset:0}
 body{background:var(--bg);color:var(--ink);font:15px/1.45 var(--body);overflow:hidden}
 button,input,select,textarea{font:inherit;color:inherit}
+input,select,textarea{font-size:16px}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #map{position:fixed;inset:0;z-index:0;background:var(--panel2)}
@@ -2073,6 +2075,26 @@ addEventListener("online", offlineZoom); addEventListener("offline", offlineZoom
 render();
 if (location.hash.startsWith("#import=")){ const c=location.hash; history.replaceState(null,"",location.pathname+location.search); importCode(c); }
 else if (S.view && S.view.z>=11) searchArea();
+
+// Page itself never scrolls; only the sheet body and map move.
+(function(){
+  const pin=()=>{if(window.scrollX||window.scrollY)window.scrollTo(0,0);const se=document.scrollingElement;if(se&&se.scrollTop)se.scrollTop=0};
+  addEventListener('scroll',pin,{passive:true});
+  document.addEventListener('focusout',()=>setTimeout(pin,60));
+  document.addEventListener('focusin',()=>setTimeout(pin,300));
+  if(window.visualViewport){visualViewport.addEventListener('resize',pin);visualViewport.addEventListener('scroll',pin)}
+  document.addEventListener('touchmove',e=>{
+    if(e.touches.length>1)return;
+    let n=e.target;
+    while(n&&n!==document.body){
+      if(n.id==='map'||n.classList&&(n.classList.contains('leaflet-container')))return;
+      const cs=n.nodeType===1&&getComputedStyle(n);
+      if(cs&&/(auto|scroll)/.test(cs.overflowY+cs.overflowX)&&(n.scrollHeight>n.clientHeight||n.scrollWidth>n.clientWidth))return;
+      n=n.parentNode;
+    }
+    e.preventDefault();
+  },{passive:false});
+})();
 </script>
 </body>
 </html>
