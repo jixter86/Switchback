@@ -19,7 +19,7 @@ jobs:
       - name: CORS check for Overpass mirrors
         run: |
           for u in https://overpass-api.de/api/interpreter https://overpass.private.coffee/api/interpreter https://maps.mail.ru/osm/tools/overpass/api/interpreter; do echo "$u $(curl -s -m 30 -o /dev/null -D - -H 'Origin: https://jixter86.github.io' --data-urlencode 'data=[out:json];node(1);out;' $u | grep -i -E '^HTTP|access-control-allow-origin' | tr -d '\r' | tr '\n' ' ')"; done
-      - run: node tests/wx.mjs
+      - run: node tests/wx.mjs && node tests/pv.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: shots, path: shots }
