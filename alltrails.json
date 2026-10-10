@@ -252,6 +252,258 @@
 "bike": false
 }
 ]
+},
+{
+"name": "Honolulu (Waikiki), HI",
+"bbox": [
+21.148,
+-157.974,
+21.419,
+-157.684
+],
+"at": "2026-10-10",
+"trails": [
+{
+"id": 10007110,
+"n": "Diamond Head Crater (Lēʻahi) Summit Trail",
+"u": "https://www.alltrails.com/trail/hawaii/oahu/diamond-head-leahi-summit-trail",
+"r": 4.7,
+"l": 2414,
+"g": 142,
+"d": "Moderate",
+"rt": "O",
+"loc": "Diamond Head State Monument",
+"bike": false
+},
+{
+"id": 10003291,
+"n": "Mānoa Falls Trail",
+"u": "https://www.alltrails.com/trail/hawaii/oahu/manoa-falls-trail",
+"r": 4.6,
+"l": 2897,
+"g": 131,
+"d": "Moderate",
+"rt": "O",
+"loc": "Round Top Forest Reserve",
+"bike": false
+},
+{
+"id": 10243411,
+"n": "Kuliʻouʻou Ridge Trail",
+"u": "https://www.alltrails.com/trail/hawaii/oahu/kuliouou-ridge-trail",
+"r": 4.8,
+"l": 7725,
+"g": 531,
+"d": "Hard",
+"rt": "O",
+"loc": "Kuliouou Forest Reserve",
+"bike": false
+},
+{
+"id": 10239140,
+"n": "Wiliwilinui Ridge Trail",
+"u": "https://www.alltrails.com/trail/hawaii/oahu/wiliwilinui-ridge-trail",
+"r": 4.8,
+"l": 7886,
+"g": 449,
+"d": "Hard",
+"rt": "O",
+"loc": "Oahu",
+"bike": false
+},
+{
+"id": 10689079,
+"n": "Lulumahu Falls Trail",
+"u": "https://www.alltrails.com/trail/hawaii/oahu/upper-lulumahu-falls-loop-trails",
+"r": 4.7,
+"l": 2736,
+"g": 66,
+"d": "Moderate",
+"rt": "O",
+"loc": "Round Top Forest Reserve",
+"bike": false
+},
+{
+"id": 10012252,
+"n": "Makiki Valley Loop",
+"u": "https://www.alltrails.com/trail/hawaii/oahu/maunalaha-makiki-valley-and-kanealole-trails-loop",
+"r": 4.6,
+"l": 4989,
+"g": 269,
+"d": "Moderate",
+"rt": "L",
+"loc": "Round Top Forest Reserve",
+"bike": false
+},
+{
+"id": 10282130,
+"n": "Judd Trail",
+"u": "https://www.alltrails.com/trail/hawaii/oahu/judd-trail",
+"r": 4.6,
+"l": 2092,
+"g": 52,
+"d": "Moderate",
+"rt": "L",
+"loc": "Round Top Forest Reserve",
+"bike": false
+},
+{
+"id": 10279004,
+"n": "Likeke Falls Trail",
+"u": "https://www.alltrails.com/trail/hawaii/oahu/likeke-falls-trail",
+"r": 4.6,
+"l": 1287,
+"g": 70,
+"d": "Moderate",
+"rt": "O",
+"loc": "Nuʻuanu Pali State Wayside",
+"bike": false
+},
+{
+"id": 10243748,
+"n": "ʻAihualama and Pauoa Flats Trail",
+"u": "https://www.alltrails.com/trail/hawaii/oahu/aihualama-and-pauoa-flats-trail",
+"r": 4.6,
+"l": 8530,
+"g": 390,
+"d": "Moderate",
+"rt": "O",
+"loc": "Round Top Forest Reserve",
+"bike": false
+},
+{
+"id": 10295213,
+"n": "Moanalua Valley and Tripler Ridge Trail Loop",
+"u": "https://www.alltrails.com/trail/hawaii/oahu/moanalua-valley-and-tripler-ridge-trail-loop",
+"r": 4.7,
+"l": 15772,
+"g": 870,
+"d": "Hard",
+"rt": "L",
+"loc": "Honolulu Watershed Forest Reserve",
+"bike": false
+},
+{
+"id": 10253488,
+"n": "Waʻahila Trail",
+"u": "https://www.alltrails.com/trail/hawaii/oahu/mount-olympus-awaawaloa-via-waahila-ridge-trail",
+"r": 4.6,
+"l": 4828,
+"g": 285,
+"d": "Hard",
+"rt": "O",
+"loc": "Waʻahila Ridge State Recreation Area",
+"bike": false
+},
+{
+"id": 10354942,
+"n": "Maunawili Falls via Pali Highway",
+"u": "https://www.alltrails.com/trail/hawaii/oahu/maunawili-falls-from-pali-highway",
+"r": 4.6,
+"l": 9817,
+"g": 387,
+"d": "Hard",
+"rt": "O",
+"loc": "Nuʻuanu Pali State Wayside",
+"bike": false
+},
+{
+"id": 10040496,
+"n": "Puʻu Pia Trail",
+"u": "https://www.alltrails.com/trail/hawaii/oahu/puu-pia-trail",
+"r": 4.5,
+"l": 3380,
+"g": 165,
+"d": "Moderate",
+"rt": "O",
+"loc": "Honolulu Watershed Forest Reserve",
+"bike": false
+},
+{
+"id": 10259766,
+"n": "Diamond Head Crater Tour",
+"u": "https://www.alltrails.com/trail/hawaii/oahu/diamond-head-crater-tour",
+"r": 4.5,
+"l": 6598,
+"g": 67,
+"d": "Easy",
+"rt": "L",
+"loc": "Diamond Head State Monument",
+"bike": false
+},
+{
+"id": 11464622,
+"n": "Mount Olympus via Waʻahila Trail",
+"u": "https://www.alltrails.com/trail/hawaii/oahu/mount-olympus-via-wa-ahila-trail",
+"r": 4.7,
+"l": 9012,
+"g": 539,
+"d": "Hard",
+"rt": "O",
+"loc": "Waʻahila Ridge State Recreation Area",
+"bike": false
+},
+{
+"id": 10313783,
+"n": "Waipuilani Falls",
+"u": "https://www.alltrails.com/trail/hawaii/oahu/waipuilani-falls",
+"r": 4.6,
+"l": 3219,
+"g": 115,
+"d": "Moderate",
+"rt": "O",
+"loc": "Round Top Forest Reserve",
+"bike": false
+},
+{
+"id": 10421885,
+"n": "Pauoa Flats via Kalawahine Trail",
+"u": "https://www.alltrails.com/trail/hawaii/oahu/pauoa-flats-via-kalawahine-trail",
+"r": 4.6,
+"l": 5955,
+"g": 128,
+"d": "Moderate",
+"rt": "O",
+"loc": "Round Top Forest Reserve",
+"bike": false
+},
+{
+"id": 10335341,
+"n": "Koʻolau Golf Course to Pali Lookout via Old Pali Road",
+"u": "https://www.alltrails.com/trail/hawaii/oahu/koolau-golf-course-to-pali-lookout-via-old-pali-road",
+"r": 4.7,
+"l": 5472,
+"g": 260,
+"d": "Hard",
+"rt": "O",
+"loc": "Oahu",
+"bike": false
+},
+{
+"id": 10706130,
+"n": "Manoa Cliff, Kalawahine, and Makiki Valley Loop",
+"u": "https://www.alltrails.com/trail/hawaii/oahu/manoa-cliff-kalawahine-and-makiki-valley-loop",
+"r": 4.7,
+"l": 9656,
+"g": 379,
+"d": "Moderate",
+"rt": "L",
+"loc": "Round Top Forest Reserve",
+"bike": false
+},
+{
+"id": 10037509,
+"n": "Hoʻomaluhia Botanical Garden Trail",
+"u": "https://www.alltrails.com/trail/hawaii/oahu/hoomaluhia-botanical-garden-trail",
+"r": 4.6,
+"l": 3219,
+"g": 49,
+"d": "Easy",
+"rt": "O",
+"loc": "Hoʻomaluhia Park",
+"bike": false
+}
+]
 }
 ]
 }

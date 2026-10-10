@@ -982,19 +982,23 @@ function estHours(t){ const km=(t.loop?t.len:t.len*2)/1000, up=(t.elev? t.elev.g
 // Public Overpass servers that send CORS headers. The main one is often busy (504/429), so retry, then fall back.
 const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
+/* Ask the main server first; if it hasn't answered after a few seconds, ask the mirrors too and take the first good answer. */
 async function overpass(q, onRetry){
-  let last;
-  const order=[OVERPASS[0], OVERPASS[1], OVERPASS[0], OVERPASS[2], OVERPASS[1]];
-  for (let i=0;i<order.length;i++){
-    if (i){ onRetry?.(i); await sleep(i===2?3000:800); }
-    try { const ctl=new AbortController(), tm=setTimeout(()=>ctl.abort(), 35000);
-      const r=await fetch(order[i], { method:"POST", body:"data="+encodeURIComponent(q), headers:{ "Content-Type":"application/x-www-form-urlencoded" }, signal:ctl.signal });
-      clearTimeout(tm);
-      if (r.ok){ const j=await r.json(); if (j.remark && /runtime error|timed out/i.test(j.remark) && !(j.elements||[]).length) throw new Error(j.remark); return j; }
-      last=new Error("Overpass "+r.status); }
-    catch(e){ last=e; }
-  }
-  throw last;
+  const once=(url, ctl)=>fetch(url, { method:"POST", body:"data="+encodeURIComponent(q), headers:{ "Content-Type":"application/x-www-form-urlencoded" }, signal:ctl.signal })
+    .then(async r=>{ if (!r.ok) throw new Error("Overpass "+r.status); const j=await r.json();
+      if (j.remark && /runtime error|timed out/i.test(j.remark) && !(j.elements||[]).length) throw new Error(j.remark); return j; });
+  const round=()=>new Promise((resolve, reject)=>{
+    const ctls=[], timers=[]; let left=OVERPASS.length, done=false, last;
+    const finish=()=>{ done=true; timers.forEach(clearTimeout); ctls.forEach(c=>c.abort()); };
+    const start=(i)=>{ if (done) return; if (i) onRetry?.(i); const ctl=new AbortController(); ctls.push(ctl);
+      timers.push(setTimeout(()=>ctl.abort(), 45000));
+      once(OVERPASS[i], ctl).then(j=>{ if (!done){ finish(); resolve(j); } })
+        .catch(e=>{ last=e; if (--left===0 && !done){ finish(); reject(last); } else if (!done && i+1<OVERPASS.length && !started[i+1]){ started[i+1]=true; start(i+1); } }); };
+    const started=[true];
+    start(0);
+    for (let i=1;i<OVERPASS.length;i++) timers.push(setTimeout(()=>{ if (!started[i]){ started[i]=true; start(i); } }, 6000*i));
+  });
+  try { return await round(); } catch(e){ onRetry?.(9); await sleep(3000); return await round(); }
 }
 function parseCoords(s){
   const m=String(s||"").match(/(-?\d{1,2}(?:\.\d+)?)\s*[, ]\s*(-?\d{1,3}(?:\.\d+)?)/);
@@ -1178,7 +1182,7 @@ nwr["amenity"="parking"](${bb});
 out center;`;
   R.center=[c.lat,c.lng]; R.searching=true; R.searchErr=null; R.trails=[]; R.byId={}; render();
   try {
-    const t=buildTrails(await overpass(q, ()=>{ const c=$(".count"); if (c) c.innerHTML='<span class="spin"></span> The trail server is busy, trying again…'; }));
+    const t=buildTrails(await overpass(q, ()=>{ const c=$(".count"); if (c) c.innerHTML='<span class="spin"></span> The trail server is slow, trying a backup server…'; }));
     R.trails=t; R.byId=Object.fromEntries(t.map(x=>[x.id,x]));
   } catch(e){ R.searchErr=navigator.onLine===false ? "You're offline." : "The OpenStreetMap trail servers are overloaded right now. Wait a few seconds and tap Try again."; }
   R.searching=false; render(); prefetchElev();
@@ -1758,7 +1762,7 @@ if ("serviceWorker" in navigator && location.protocol==="https:") navigator.serv
    so these are matched to mapped trails by name; the rest are listed separately and open on AllTrails. */
 let AT=null;
 if (/^https?:/.test(location.protocol)) fetch("alltrails.json").then(r=>r.ok?r.json():null).then(d=>{ if (d){ AT=d; render(); } }).catch(()=>{});
-const atNorm=s=>String(s).toLowerCase().replace(/[’'.]/g,"").replace(/\b(the|trail|trailhead|loop|mount|mt)\b/g,m=>m==="mount"||m==="mt"?"mt":"").replace(/[^a-z0-9]+/g," ").trim();
+const atNorm=s=>String(s).normalize("NFD").toLowerCase().replace(/\(.*?\)/g,"").replace(/[\u0300-\u036f\u02bb\u02bc‘’'.]/g,"").replace(/\b(the|trail|trailhead|loop|mount|mt)\b/g,m=>m==="mount"||m==="mt"?"mt":"").replace(/[^a-z0-9]+/g," ").trim();
 const AT_DIFF={ Easy:"easy", Moderate:"moderate", Hard:"hard", Strenuous:"hard" };
 function atAreas(){ if (!AT||!R.center) return [];
   const b=map.getBounds(); return AT.areas.filter(a=>{ const [s,w,n,e]=a.bbox; return !(n<b.getSouth()||s>b.getNorth()||e<b.getWest()||w>b.getEast()); }); }
