@@ -815,6 +815,21 @@ textarea.txt{min-height:70px;resize:vertical}
 .gallery span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
 
 /* saved + record */
+.days{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:8px}
+.day{flex:0 0 auto;min-width:52px;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:6px 4px;display:flex;flex-direction:column;align-items:center;gap:1px;font-size:.78rem;color:var(--ink)}
+.day.on{border-color:var(--brand);background:var(--brand);color:#fff}
+.day .dot{width:8px;height:8px;border-radius:50%;display:block;margin-top:2px}
+.s-great{--wc:#2e8540}.s-good{--wc:#7fae3e}.s-fair{--wc:#d39b1f}.s-poor{--wc:#c0392b}
+.dot{background:var(--wc)} .chip.s-great,.chip.s-good,.chip.s-fair,.chip.s-poor{color:var(--wc)}
+.wxrow{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:10px;margin-bottom:8px}
+.wxrow.best{border-color:#2e8540;box-shadow:0 0 0 1px #2e8540 inset}
+.wxtop{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.linkish{background:none;border:0;padding:0;font:inherit;font-weight:700;color:var(--ink);text-align:left;margin-right:auto}
+.hstrip{display:flex;gap:3px;overflow-x:auto;margin-top:6px;padding-bottom:2px}
+.hcell{flex:0 0 42px;display:flex;flex-direction:column;align-items:center;gap:1px;font-size:.72rem;border-radius:8px;padding:4px 0;background:var(--panel2)}
+.hcell b{font-size:.82rem}
+.hcell{box-shadow:inset 0 -3px 0 var(--wc,transparent)}
+.hcell.past{opacity:.45}
 .listhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:14px 0 6px}
 .listhead h3{margin:0;font:700 1.15rem var(--display);text-transform:uppercase;letter-spacing:.03em}
 .recstats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}
@@ -1468,7 +1483,8 @@ function drawSaved(){ if (R.tab!=="saved") return; trailLayer.clearLayers();
     if (t.segs) L.polyline(t.segs,{ color:css(DCOL[difficulty(t)]), weight:4 }).on("click",()=>openTrail(t.id)).addTo(trailLayer);
     L.circleMarker(t.head,{ radius:6, color:"#fff", weight:2, fillColor:css("--accent"), fillOpacity:1 }).bindTooltip(t.name).on("click",()=>openTrail(t.id)).addTo(trailLayer); } }
 function renderSaved(b){
-  let h=""; const lists=Object.entries(S.lists);
+  let h=weatherBoard(); const lists=Object.entries(S.lists);
+  loadHourly();
   for (const [k,l] of lists){
     const ts=l.ids.map(id=>S.saved[id]).filter(Boolean);
     h+=`<div class="listhead"><h3>${esc(l.name)} <span class="note">${ts.length}</span></h3><span class="row">
@@ -1479,7 +1495,7 @@ function renderSaved(b){
   <div class="lab">Import</div>
   <form class="row" id="impForm"><input class="txt" id="impCode" placeholder="Paste a share code" style="flex:1;width:auto"><button class="btn">Import</button></form>
   <p class="row" style="margin-top:8px"><label class="btn" style="cursor:pointer">Import GPX file<input type="file" id="gpxIn" accept=".gpx,application/gpx+xml" hidden></label></p>`;
-  b.innerHTML=h; bindCards(b);
+  b.innerHTML=h; bindCards(b); bindWeatherBoard(b);
   b.querySelectorAll("[data-share]").forEach(x=>x.onclick=()=>{ const l=S.lists[x.dataset.share]; shareCode({ n:l.name, t:l.ids.map(id=>S.saved[id]).filter(Boolean).map(mini) }, l.name); });
   b.querySelectorAll("[data-show]").forEach(x=>x.onclick=()=>{ const ts=S.lists[x.dataset.show].ids.map(id=>S.saved[id]).filter(Boolean);
     if (ts.length){ map.fitBounds(L.latLngBounds(ts.map(t=>t.head)).pad(.2), { maxZoom:14 }); sheet("peek"); } });
@@ -1756,6 +1772,76 @@ async function saveOffline(t){
 }
 async function offlineStats(){ try { const c=await caches.open(TILE_CACHE); const n=(await c.keys()).length; const est=await navigator.storage?.estimate?.(); return { n, mb:est?Math.round(est.usage/1e6):null }; } catch(e){ return null; } }
 if ("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
+
+/* ================= hourly weather board (Saved tab) ================= */
+/* One Open-Meteo request covers every saved trailhead. Each daylight hour gets a 0-100 hiking score from rain chance,
+   temperature, wind and storms; a trail's score for a day is the average of its 7 AM to 7 PM hours. */
+let hwxBusy=false;
+async function loadHourly(force){
+  const ts=Object.values(S.saved).filter(t=>t.head); if (!ts.length || hwxBusy) return;
+  const unit=imp()?"F":"C";
+  const stale=ts.filter(t=>force || !t.hwx || t.hwx.u!==unit || Date.now()-t.hwx.at>3600e3); if (!stale.length) return;
+  if (!force && Date.now()-(R.hwxTry||0)<60e3) return; // don't retry in a loop when offline
+  R.hwxTry=Date.now();
+  hwxBusy=true; if (R.tab==="saved" && !R.sel) render();
+  try {
+    for (let i=0;i<stale.length;i+=20){ const grp=stale.slice(i,i+20);
+      const u="https://api.open-meteo.com/v1/forecast?latitude="+grp.map(t=>t.head[0].toFixed(4)).join(",")+"&longitude="+grp.map(t=>t.head[1].toFixed(4)).join(",")+
+        "&hourly=temperature_2m,precipitation_probability,weather_code,wind_speed_10m"+(imp()?"&temperature_unit=fahrenheit&wind_speed_unit=mph":"&wind_speed_unit=kmh")+"&timezone=auto&forecast_days=7";
+      let r=await fetch(u); if (r.status===429){ await sleep(2500); r=await fetch(u); } if (!r.ok) throw new Error("weather "+r.status);
+      let j=await r.json(); if (!Array.isArray(j)) j=[j];
+      grp.forEach((t,k)=>{ const h=j[k]?.hourly; if (!h) return;
+        t.hwx={ at:Date.now(), u:unit, t:h.time, tp:h.temperature_2m.map(Math.round), pp:h.precipitation_probability, c:h.weather_code, w:h.wind_speed_10m.map(Math.round) }; });
+    }
+    save(); R.hwxErr=null;
+  } catch(e){ R.hwxErr=navigator.onLine===false ? "You're offline. Showing the last forecast saved." : "Couldn't update the forecast right now."; }
+  hwxBusy=false; if (R.tab==="saved" && !R.sel) render();
+}
+function hourScore(x, i){
+  const F=x.u==="F", tp=x.tp[i], w=x.w[i], c=x.c[i]; let s=100-(x.pp[i]||0)*0.6;
+  const lo=F?50:10, hi=F?75:24, k=F?2.5:4.5; if (tp<lo) s-=(lo-tp)*k; else if (tp>hi) s-=(tp-hi)*k;
+  const wl=F?10:16; if (w>wl) s-=(w-wl)*(F?2:1.2);
+  if (c>=95) s-=40; else if ((c>=71&&c<=77)||c===85||c===86) s-=25; else if ((c>=51&&c<=67)||(c>=80&&c<=82)) s-=c>=63&&c!==80?25:15; else if (c===45||c===48) s-=10;
+  return Math.max(0, Math.min(100, Math.round(s))); }
+function dayOf(x, date){ const idx=[]; x.t.forEach((t,i)=>{ if (t.startsWith(date)) idx.push(i); }); return idx; }
+function dayScore(x, date){ const day=dayOf(x,date).filter(i=>{ const h=+x.t[i].slice(11,13); return h>=7&&h<=19; }); if (!day.length) return null;
+  const sc=day.map(i=>hourScore(x,i)); let best=-1, at=0;
+  for (let k=0;k+3<=sc.length;k++){ const v=sc[k]+sc[k+1]+sc[k+2]; if (v>best){ best=v; at=k; } }
+  return { score:Math.round(sc.reduce((a,b)=>a+b,0)/sc.length), from:+x.t[day[at]].slice(11,13),
+    hi:Math.max(...day.map(i=>x.tp[i])), lo:Math.min(...day.map(i=>x.tp[i])), pp:Math.max(...day.map(i=>x.pp[i]||0)), w:Math.max(...day.map(i=>x.w[i])) }; }
+const scoreWord=s=>s>=80?"Great":s>=60?"Good":s>=40?"Fair":"Poor";
+const scoreCls=s=>s>=80?"s-great":s>=60?"s-good":s>=40?"s-fair":"s-poor";
+const hr12=h=>(h%12||12)+(h<12?" AM":" PM");
+function weatherBoard(){
+  const ts=Object.values(S.saved).filter(t=>t.head);
+  if (!ts.length) return "";
+  let o=`<div class="listhead"><h3>Trailhead weather</h3><span class="row"><button class="btn" id="wxRefresh"${hwxBusy?" disabled":""}>${hwxBusy?'<span class="spin"></span>':"Refresh"}</button></span></div>`;
+  const withWx=ts.filter(t=>t.hwx);
+  if (!withWx.length) return o+`<p class="note">${hwxBusy?'<span class="spin"></span> Getting hourly forecasts…':esc(R.hwxErr||"No forecast yet.")}</p>`;
+  const dates=[...new Set(withWx[0].hwx.t.map(t=>t.slice(0,10)))].slice(0,7), now=new Date();
+  if (!R.wxDay || !dates.includes(R.wxDay)) R.wxDay=dates[now.getHours()>=18&&dates[1]?1:0];
+  o+=`<div class="days">${dates.map((d,i)=>{ const dt=new Date(d+"T12:00");
+    const best=Math.max(...withWx.map(t=>dayScore(t.hwx,d)?.score??0));
+    return `<button class="day${d===R.wxDay?" on":""}" data-day="${d}"><b>${i===0?"Today":dt.toLocaleDateString(undefined,{ weekday:"short" })}</b><span>${dt.getDate()}</span><i class="dot ${scoreCls(best)}"></i></button>`; }).join("")}</div>`;
+  if (R.hwxErr) o+=`<p class="note">${esc(R.hwxErr)}</p>`;
+  const rows=withWx.map(t=>({ t, d:dayScore(t.hwx,R.wxDay) })).filter(r=>r.d).sort((a,b)=>b.d.score-a.d.score);
+  const today=R.wxDay===new Date().toLocaleDateString("en-CA");
+  rows.forEach((r,n)=>{ const x=r.t.hwx, d=r.d, idx=dayOf(x,R.wxDay).filter(i=>{ const h=+x.t[i].slice(11,13); return h>=6&&h<=20; });
+    o+=`<div class="wxrow${n===0&&rows.length>1?" best":""}">
+      <div class="wxtop"><button class="linkish" data-open="${esc(r.t.id)}">${esc(r.t.name)}</button>${n===0&&rows.length>1?'<span class="chip s-great">Best</span>':""}<span class="chip ${scoreCls(d.score)}">${scoreWord(d.score)} ${d.score}</span></div>
+      <div class="note">${d.hi}°/${d.lo}° · rain up to ${d.pp}% · wind to ${d.w} ${imp()?"mph":"km/h"} · best ${hr12(d.from)}–${hr12(d.from+3)}</div>
+      <div class="hstrip">${idx.map(i=>{ const h=+x.t[i].slice(11,13), s=hourScore(x,i), past=today&&h<now.getHours();
+        return `<div class="hcell ${scoreCls(s)}${past?" past":""}"><span>${hr12(h).replace(" ","").toLowerCase()}</span><span>${(WX[x.c[i]]||["·"])[0]}</span><b>${x.tp[i]}°</b><span>${x.pp[i]??0}%</span></div>`; }).join("")}</div>
+    </div>`; });
+  const upd=Math.min(...withWx.map(t=>t.hwx.at));
+  o+=`<p class="note">Forecast from Open-Meteo, updated ${new Date(upd).toLocaleTimeString([], { hour:"numeric", minute:"2-digit" })}. Scores favor dry, mild, calm daylight hours.</p>`;
+  return o;
+}
+function bindWeatherBoard(b){
+  b.querySelectorAll("[data-day]").forEach(x=>x.onclick=()=>{ R.wxDay=x.dataset.day; render(); });
+  b.querySelectorAll("[data-open]").forEach(x=>x.onclick=()=>openTrail(x.dataset.open));
+  $("#wxRefresh")&&($("#wxRefresh").onclick=()=>loadHourly(true));
+}
 
 /* ================= AllTrails listings ================= */
 /* alltrails.json holds AllTrails trails fetched through the AllTrails connector, per area. AllTrails gives no coordinates,
