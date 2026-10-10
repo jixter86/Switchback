@@ -767,6 +767,8 @@ button{cursor:pointer}
 .chip.easy{color:var(--easy)}.chip.moderate{color:var(--mod)}.chip.hard{color:var(--hard)}
 .chip.plain{color:var(--muted)}
 .chip.at{color:#fff;background:#3b7d23;border-color:#3b7d23}
+.chip.pop{color:#b5410f;border-color:#e8915f;background:#fff1e8;text-transform:none;letter-spacing:0}
+@media (prefers-color-scheme: dark){.chip.pop{color:#ffb38a;background:#3a1f10;border-color:#8a4520}}
 .card.atcard{border-left:4px solid #3b7d23;text-decoration:none;color:var(--ink)}
 .atbox{border-color:#3b7d23}
 .atlab{color:#3b7d23;margin-top:16px}
@@ -1273,7 +1275,8 @@ function visibleTrails(){
     t=t.filter(x=> f.len==="s" ? mi(x)<3 : f.len==="m" ? mi(x)>=3&&mi(x)<=8 : mi(x)>8); }
   const dist=x=>R.center?fd(R.center,x.head):0;
   const tier=x=>(x.osm?.t==="r"?0:x.official?1:2);
-  const sorts={ best:(a,b)=>tier(a)-tier(b)||dist(a)-dist(b), near:(a,b)=>dist(a)-dist(b), short:(a,b)=>a.len-b.len, long:(a,b)=>b.len-a.len, name:(a,b)=>a.name.localeCompare(b.name) };
+  const pr=x=>atFor(x)?.p??999;
+  const sorts={ best:(a,b)=>tier(a)-tier(b)||dist(a)-dist(b), pop:(a,b)=>pr(a)-pr(b)||tier(a)-tier(b)||dist(a)-dist(b), near:(a,b)=>dist(a)-dist(b), short:(a,b)=>a.len-b.len, long:(a,b)=>b.len-a.len, name:(a,b)=>a.name.localeCompare(b.name) };
   return t.sort(sorts[f.sort]);
 }
 
@@ -1366,7 +1369,7 @@ function card(t, extra){
   const dist=R.center && R.tab==="explore" ? fd(R.center,t.head) : null;
   return `<button class="card" data-id="${esc(t.id)}">
     <span class="nm">${esc(t.name)}${saved?" <span title='Saved' style='color:var(--accent)'>&#9829;</span>":""}</span>
-    <span class="meta"><span class="chip ${d}">${d}</span>${t.kind==="bike"?'<span class="chip plain">Bike trail</span>':t.kind==="shared"?'<span class="chip plain">Hike + bike</span>':""}${S.saved[t.id]?.offline?'<span class="chip plain">Offline</span>':""}${(a=>a?`<span class="chip at">AllTrails ★ ${a.r.toFixed(1)}</span>`:"")(atFor(t))}<span>${fmtLen(t.loop?t.len:t.len*2)} ${t.loop?"loop":"round trip"}</span>${t.elev?`<span>&#8599; ${fmtEl(t.elev.gain+(t.loop?0:t.elev.loss))}</span>`:""}${dist!=null?`<span>${fmtLen(dist)} away</span>`:""}${extra||""}</span>
+    <span class="meta"><span class="chip ${d}">${d}</span>${t.kind==="bike"?'<span class="chip plain">Bike trail</span>':t.kind==="shared"?'<span class="chip plain">Hike + bike</span>':""}${S.saved[t.id]?.offline?'<span class="chip plain">Offline</span>':""}${(a=>a?`<span class="chip at">AllTrails ★ ${a.r.toFixed(1)}</span>${popChip(a)}`:"")(atFor(t))}<span>${fmtLen(t.loop?t.len:t.len*2)} ${t.loop?"loop":"round trip"}</span>${t.elev?`<span>&#8599; ${fmtEl(t.elev.gain+(t.loop?0:t.elev.loss))}</span>`:""}${dist!=null?`<span>${fmtLen(dist)} away</span>`:""}${extra||""}</span>
   </button>`;
 }
 function bindCards(root){ root.querySelectorAll(".card").forEach(c=>{ c.onclick=()=>openTrail(c.dataset.id);
@@ -1379,7 +1382,7 @@ function renderExplore(b){
     <select id="fAct" aria-label="Activity">${opt("hike","Hiking",f.act)}${opt("bike","Biking",f.act)}${opt("all","Hike + bike",f.act)}</select>
     <select id="fDiff" aria-label="Difficulty">${opt("","Any difficulty",f.diff)}${opt("easy","Easy",f.diff)}${opt("moderate","Moderate",f.diff)}${opt("hard","Hard",f.diff)}</select>
     <select id="fLen" aria-label="Length">${opt("","Any length",f.len)}${opt("s",imp()?"Under 3 mi":"Under 5 km",f.len)}${opt("m",imp()?"3 to 8 mi":"5 to 13 km",f.len)}${opt("l",imp()?"Over 8 mi":"Over 13 km",f.len)}</select>
-    <select id="fSort" aria-label="Sort">${opt("best","Recommended",f.sort)}${opt("near","Nearest",f.sort)}${opt("short","Shortest",f.sort)}${opt("long","Longest",f.sort)}${opt("name","A to Z",f.sort)}</select>
+    <select id="fSort" aria-label="Sort">${opt("best","Recommended",f.sort)}${opt("pop","Most popular",f.sort)}${opt("near","Nearest",f.sort)}${opt("short","Shortest",f.sort)}${opt("long","Longest",f.sort)}${opt("name","A to Z",f.sort)}</select>
   </div>`;
   if (R.searching) h+=`<p class="count"><span class="spin"></span> Looking for trails…</p>`;
   else if (R.searchErr) h+=`<div class="empty"><strong>Search failed</strong>${esc(R.searchErr)}<p><button class="btn" id="retry">Try again</button></p></div>`;
@@ -2003,16 +2006,18 @@ function atOnly(){ const f=R.filt, names=new Set(R.trails.map(t=>atNorm(t.name))
   if (f.act==="bike") out=out.filter(x=>x.bike);
   if (f.diff) out=out.filter(x=>AT_DIFF[x.d]===f.diff);
   if (f.len){ const mi=x=>x.l/1609.344; out=out.filter(x=> f.len==="s" ? mi(x)<3 : f.len==="m" ? mi(x)>=3&&mi(x)<=8 : mi(x)>8); }
-  return out.sort((a,b)=>b.r-a.r); }
+  return out.sort(f.sort==="pop" ? (a,b)=>(a.p??999)-(b.p??999)||b.r-a.r : (a,b)=>b.r-a.r); }
+function popChip(x){ return x?.p&&x.p<=10 ? `<span class="chip pop" title="AllTrails popularity rank in this area">&#128293; #${x.p} popular</span>` : ""; }
+function popLine(x){ const a=[]; if (x.p) a.push(`#${x.p} most popular in this area`); if (x.tf) a.push({heavy:"usually busy (heavy traffic)",moderate:"moderate traffic",light:"usually quiet (light traffic)"}[x.tf]); return a.length?`<p style="margin:0 0 8px">&#128293; ${a.join(", ")}.</p>`:""; }
 const RT={ O:"out & back", L:"loop", P:"point to point" };
 function atCard(x){ return `<a class="card atcard" href="${esc(x.u)}" target="_blank" rel="noopener">
     <span class="nm">${esc(x.n)}</span>
-    <span class="meta"><span class="chip at">AllTrails</span><span class="chip ${AT_DIFF[x.d]||"plain"}">${esc(x.d)}</span><span>★ ${x.r.toFixed(1)}</span><span>${fmtLen(x.l)} ${RT[x.rt]||""}</span><span>&#8599; ${fmtEl(x.g)}</span></span>
+    <span class="meta"><span class="chip at">AllTrails</span>${popChip(x)}<span class="chip ${AT_DIFF[x.d]||"plain"}">${esc(x.d)}</span><span>★ ${x.r.toFixed(1)}</span><span>${fmtLen(x.l)} ${RT[x.rt]||""}</span><span>&#8599; ${fmtEl(x.g)}</span></span>
     <span class="meta"><span>${esc(x.loc)} · opens in AllTrails</span></span></a>`; }
 function atBox(t){ const x=atFor(t);
   if (x) return `<div class="box atbox"><div class="lab" style="margin-top:0"><span class="chip at">AllTrails</span></div>
     <p style="margin:6px 0"><b>${esc(x.n)}</b>: ★ ${x.r.toFixed(1)}, ${esc(x.d)}, ${fmtLen(x.l)} ${RT[x.rt]||""}, ${fmtEl(x.g)} gain.</p>
-    <p class="note" style="margin:0 0 8px">AllTrails' route can differ from the mapped trail above, for example a loop or a section.</p>
+    ${popLine(x)}<p class="note" style="margin:0 0 8px">AllTrails' route can differ from the mapped trail above, for example a loop or a section.</p>
     <a class="btn" href="${esc(x.u)}" target="_blank" rel="noopener">Open in AllTrails</a></div>`;
   return `<div class="box atbox"><div class="lab" style="margin-top:0"><span class="chip at">AllTrails</span></div>
     <p class="note" style="margin:6px 0 8px">Not in Switchback's AllTrails list for this area.</p>
