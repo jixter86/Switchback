@@ -764,6 +764,10 @@ button{cursor:pointer}
 .chip{display:inline-block;font:600 .75rem var(--body);padding:2px 8px;border-radius:999px;border:1px solid currentColor;text-transform:uppercase;letter-spacing:.05em}
 .chip.easy{color:var(--easy)}.chip.moderate{color:var(--mod)}.chip.hard{color:var(--hard)}
 .chip.plain{color:var(--muted)}
+.chip.at{color:#fff;background:#3b7d23;border-color:#3b7d23}
+.card.atcard{border-left:4px solid #3b7d23;text-decoration:none;color:var(--ink)}
+.atbox{border-color:#3b7d23}
+.atlab{color:#3b7d23;margin-top:16px}
 .empty{text-align:center;padding:24px 12px;color:var(--muted)}
 .empty strong{display:block;font:700 1.25rem var(--display);color:var(--ink);text-transform:uppercase;margin-bottom:4px}
 .btn{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:9px 14px;font-weight:600;font-size:.9rem;display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--ink)}
@@ -1250,7 +1254,7 @@ function card(t, extra){
   const dist=R.center && R.tab==="explore" ? fd(R.center,t.head) : null;
   return `<button class="card" data-id="${esc(t.id)}">
     <span class="nm">${esc(t.name)}${saved?" <span title='Saved' style='color:var(--accent)'>&#9829;</span>":""}</span>
-    <span class="meta"><span class="chip ${d}">${d}</span>${t.kind==="bike"?'<span class="chip plain">Bike trail</span>':t.kind==="shared"?'<span class="chip plain">Hike + bike</span>':""}${S.saved[t.id]?.offline?'<span class="chip plain">Offline</span>':""}<span>${fmtLen(t.loop?t.len:t.len*2)} ${t.loop?"loop":"round trip"}</span>${t.elev?`<span>&#8599; ${fmtEl(t.elev.gain+(t.loop?0:t.elev.loss))}</span>`:""}${dist!=null?`<span>${fmtLen(dist)} away</span>`:""}${extra||""}</span>
+    <span class="meta"><span class="chip ${d}">${d}</span>${t.kind==="bike"?'<span class="chip plain">Bike trail</span>':t.kind==="shared"?'<span class="chip plain">Hike + bike</span>':""}${S.saved[t.id]?.offline?'<span class="chip plain">Offline</span>':""}${(a=>a?`<span class="chip at">AllTrails ★ ${a.r.toFixed(1)}</span>`:"")(atFor(t))}<span>${fmtLen(t.loop?t.len:t.len*2)} ${t.loop?"loop":"round trip"}</span>${t.elev?`<span>&#8599; ${fmtEl(t.elev.gain+(t.loop?0:t.elev.loss))}</span>`:""}${dist!=null?`<span>${fmtLen(dist)} away</span>`:""}${extra||""}</span>
   </button>`;
 }
 function bindCards(root){ root.querySelectorAll(".card").forEach(c=>{ c.onclick=()=>openTrail(c.dataset.id);
@@ -1271,7 +1275,8 @@ function renderExplore(b){
   else { const v=visibleTrails();
     const nb=R.trails.filter(x=>x.kind==="bike").length;
     h+=`<p class="count">${v.length} trail${v.length===1?"":"s"} in this area${f.act==="hike"&&nb?` · ${nb} bike trail${nb===1?"":"s"} hidden`:""}</p>`;
-    h+= v.length ? v.map(t=>card(t)).join("") : `<div class="empty"><strong>No trails here</strong>OpenStreetMap has no named trails in this view. Try zooming out or another area.</div>`; }
+    h+= v.length ? v.map(t=>card(t)).join("") : `<div class="empty"><strong>No trails here</strong>OpenStreetMap has no named trails in this view. Try zooming out or another area.</div>`;
+    const ao=atOnly(); if (ao.length) h+=`<div class="lab atlab">More on AllTrails (${ao.length})</div><p class="note" style="margin:0 0 8px">AllTrails routes with no matching trail on the map here. They open in AllTrails.</p>`+ao.map(atCard).join(""); }
   b.innerHTML=h;
   $("#fAct").onchange=e=>{ f.act=e.target.value; try { localStorage.setItem(KEY+".act", f.act); } catch(_){} render(); prefetchElev(); };
   $("#fDiff").onchange=e=>{ f.diff=e.target.value; render(); };
@@ -1393,6 +1398,7 @@ function renderDetail(b){
   const site=tg.website||tg.url; if (site && /^https?:\/\//.test(site)) rows.push(["Website", `<a href="${esc(site)}" target="_blank" rel="noopener">${esc(site.replace(/^https?:\/\//,""))}</a>`, true]);
   const osmUrl=t.osm ? `https://www.openstreetmap.org/${t.osm.t==="r"?"relation":"way"}/${t.osm.ids[0]}` : null;
   if (osmUrl) rows.push(["Source", `<a href="${osmUrl}" target="_blank" rel="noopener">OpenStreetMap</a> (edit it there if something's wrong)`, true]);
+  h+=atBox(t);
   if (rows.length) h+=`<div class="box"><div class="lab" style="margin-top:0">Details</div><dl class="tags">${rows.map(r=>`<dt>${r[0]}</dt><dd>${r[2]?r[1]:esc(r[1])}</dd>`).join("")}</dl></div>`;
 
   const off=S.saved[t.id]?.offline;
@@ -1746,6 +1752,36 @@ async function saveOffline(t){
 }
 async function offlineStats(){ try { const c=await caches.open(TILE_CACHE); const n=(await c.keys()).length; const est=await navigator.storage?.estimate?.(); return { n, mb:est?Math.round(est.usage/1e6):null }; } catch(e){ return null; } }
 if ("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
+
+/* ================= AllTrails listings ================= */
+/* alltrails.json holds AllTrails trails fetched through the AllTrails connector, per area. AllTrails gives no coordinates,
+   so these are matched to mapped trails by name; the rest are listed separately and open on AllTrails. */
+let AT=null;
+if (/^https?:/.test(location.protocol)) fetch("alltrails.json").then(r=>r.ok?r.json():null).then(d=>{ if (d){ AT=d; render(); } }).catch(()=>{});
+const atNorm=s=>String(s).toLowerCase().replace(/[’'.]/g,"").replace(/\b(the|trail|trailhead|loop|mount|mt)\b/g,m=>m==="mount"||m==="mt"?"mt":"").replace(/[^a-z0-9]+/g," ").trim();
+const AT_DIFF={ Easy:"easy", Moderate:"moderate", Hard:"hard", Strenuous:"hard" };
+function atAreas(){ if (!AT||!R.center) return [];
+  const b=map.getBounds(); return AT.areas.filter(a=>{ const [s,w,n,e]=a.bbox; return !(n<b.getSouth()||s>b.getNorth()||e<b.getWest()||w>b.getEast()); }); }
+function atFor(t){ const k=atNorm(t.name); for (const a of (AT?.areas||[])) for (const x of a.trails) if (atNorm(x.n)===k) return x; return null; }
+function atOnly(){ const f=R.filt, names=new Set(R.trails.map(t=>atNorm(t.name))); let out=[];
+  for (const a of atAreas()) for (const x of a.trails) if (!names.has(atNorm(x.n))) out.push(x);
+  if (f.act==="bike") out=out.filter(x=>x.bike);
+  if (f.diff) out=out.filter(x=>AT_DIFF[x.d]===f.diff);
+  if (f.len){ const mi=x=>x.l/1609.344; out=out.filter(x=> f.len==="s" ? mi(x)<3 : f.len==="m" ? mi(x)>=3&&mi(x)<=8 : mi(x)>8); }
+  return out.sort((a,b)=>b.r-a.r); }
+const RT={ O:"out & back", L:"loop", P:"point to point" };
+function atCard(x){ return `<a class="card atcard" href="${esc(x.u)}" target="_blank" rel="noopener">
+    <span class="nm">${esc(x.n)}</span>
+    <span class="meta"><span class="chip at">AllTrails</span><span class="chip ${AT_DIFF[x.d]||"plain"}">${esc(x.d)}</span><span>★ ${x.r.toFixed(1)}</span><span>${fmtLen(x.l)} ${RT[x.rt]||""}</span><span>&#8599; ${fmtEl(x.g)}</span></span>
+    <span class="meta"><span>${esc(x.loc)} · opens in AllTrails</span></span></a>`; }
+function atBox(t){ const x=atFor(t);
+  if (x) return `<div class="box atbox"><div class="lab" style="margin-top:0"><span class="chip at">AllTrails</span></div>
+    <p style="margin:6px 0"><b>${esc(x.n)}</b>: ★ ${x.r.toFixed(1)}, ${esc(x.d)}, ${fmtLen(x.l)} ${RT[x.rt]||""}, ${fmtEl(x.g)} gain.</p>
+    <p class="note" style="margin:0 0 8px">AllTrails' route can differ from the mapped trail above, for example a loop or a section.</p>
+    <a class="btn" href="${esc(x.u)}" target="_blank" rel="noopener">Open in AllTrails</a></div>`;
+  return `<div class="box atbox"><div class="lab" style="margin-top:0"><span class="chip at">AllTrails</span></div>
+    <p class="note" style="margin:6px 0 8px">Not in Switchback's AllTrails list for this area.</p>
+    <a class="btn" href="https://www.google.com/search?q=${encodeURIComponent("site:alltrails.com "+t.name)}" target="_blank" rel="noopener">Find on AllTrails</a></div>`; }
 
 /* ================= navigate ================= */
 const COMPASS=["north","northeast","east","southeast","south","southwest","west","northwest"];
