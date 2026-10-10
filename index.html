@@ -880,6 +880,11 @@ body.navving .leaflet-top.leaflet-right{margin-top:96px}
 .navmain.off{color:#c0392b}
 .navsub{font-size:.88rem;color:var(--muted)}
 @media (min-width:900px){.nav{left:422px;right:auto;width:400px}}
+.me2{pointer-events:none}
+.me2 .medot{position:absolute;left:24px;top:24px;width:16px;height:16px;border-radius:50%;background:#2b7bf3;border:3px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.15),0 1px 4px rgba(0,0,0,.35);box-sizing:border-box}
+.me2 .mecone{position:absolute;left:0;top:0;width:64px;height:64px;border-radius:50%;background:conic-gradient(from -28deg,transparent 0deg,rgba(43,123,243,.75) 6deg,rgba(43,123,243,.75) 50deg,transparent 56deg,transparent 360deg);-webkit-mask:radial-gradient(circle,#000 0 6px,rgba(0,0,0,.85) 9px,transparent 32px);mask:radial-gradient(circle,#000 0 6px,rgba(0,0,0,.85) 9px,transparent 32px);display:none}
+.iconbtn.half{color:#2b7bf3}
+.iconbtn.on#locBtn{background:#2b7bf3;color:#fff}
 .me{background:#2b7bf3;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 6px rgba(43,123,243,.25)}
 .leaflet-container{font-family:var(--body)}
 </style>
@@ -1268,17 +1273,50 @@ function flyTo(ll){ map.once("moveend", searchArea); map.setView(ll, 12); }
 document.addEventListener("click", e=>{ if (!e.target.closest(".top")) $("#suggest").classList.remove("show"); });
 $("#areaBtn").onclick=searchArea;
 
-/* my location */
-$("#locBtn").onclick=()=>{
-  if (meWatch!==null){ navigator.geolocation.clearWatch(meWatch); meWatch=null; if (meMarker){ map.removeLayer(meMarker); meMarker=null; } $("#locBtn").classList.remove("on"); return; }
+/* my location: blue dot with accuracy ring and a cone for the way the phone faces. Tap = center and follow;
+   dragging the map stops following; tap again to recenter; tap while following to turn it off. */
+let meAcc=null, meFollow=false, meHead=null, meLast=null;
+const meIcon=()=>L.divIcon({ className:"me2", html:'<i class="mecone"></i><i class="medot"></i>', iconSize:[64,64], iconAnchor:[32,32] });
+/* Center a point in the part of the map not covered by the bottom panel (phones) or side panel (desktop). */
+function centerVisible(ll, zoom, animate){
+  const z=zoom??map.getZoom(), pr=$("#panel").getBoundingClientRect(), mr=map.getContainer().getBoundingClientRect();
+  let dx=0, dy=0;
+  if (pr.top>mr.top+40 && pr.top<mr.bottom) dy=(mr.bottom-pr.top)/2; // bottom sheet
+  else if (pr.right<mr.right && pr.left<=mr.left+5) dx=-(pr.right-mr.left)/2; // side panel
+  const pt=map.project(ll, z).add([dx, dy]);
+  map.setView(map.unproject(pt, z), z, { animate:!!animate }); }
+function meState(){ const b=$("#locBtn"); b.classList.toggle("on", meWatch!==null && meFollow); b.classList.toggle("half", meWatch!==null && !meFollow); }
+function setHeading(h){ meHead=h; requestAnimationFrame(()=>document.querySelectorAll(".mecone").forEach(el=>{ el.style.display=h==null?"none":"block"; if (h!=null) el.style.transform=`rotate(${h}deg)`; })); }
+function onOrient(e){ let h=e.webkitCompassHeading!=null ? e.webkitCompassHeading : (e.absolute&&e.alpha!=null ? 360-e.alpha : null);
+  if (h==null) return; h=(h+(screen.orientation?.angle||window.orientation||0)+360)%360; setHeading(h); }
+let orientOn=false;
+async function startCompass(){ if (orientOn) return;
+  try { if (typeof DeviceOrientationEvent!=="undefined" && DeviceOrientationEvent.requestPermission){ if (await DeviceOrientationEvent.requestPermission()!=="granted") return; } } catch(e){ return; }
+  orientOn=true; addEventListener("deviceorientationabsolute", onOrient); addEventListener("deviceorientation", onOrient); }
+function meStart(follow){
   if (!navigator.geolocation){ toast("This browser can't share your location."); return; }
-  let first=true; $("#locBtn").classList.add("on");
+  meFollow=follow; if (meWatch!==null){ meState(); return; }
   meWatch=navigator.geolocation.watchPosition(p=>{
-    const ll=[p.coords.latitude,p.coords.longitude];
-    if (!meMarker) meMarker=L.marker(ll, { icon:L.divIcon({ className:"me", iconSize:[16,16] }), interactive:false, zIndexOffset:1000 }).addTo(map); else meMarker.setLatLng(ll);
-    if (first){ first=false; map.setView(ll, Math.max(map.getZoom(),13)); }
-  }, ()=>{ toast("Location permission was denied."); $("#locBtn").classList.remove("on"); meWatch=null; }, { enableHighAccuracy:true });
-};
+    const ll=[p.coords.latitude,p.coords.longitude], first=!meLast; meLast=ll;
+    if (!meMarker){ meMarker=L.marker(ll, { icon:meIcon(), interactive:false, zIndexOffset:1000, keyboard:false }).addTo(map); setHeading(meHead); }
+    else meMarker.setLatLng(ll);
+    if (!meAcc) meAcc=L.circle(ll, { radius:p.coords.accuracy||0, color:"#2b7bf3", weight:1, opacity:.4, fillOpacity:.1, interactive:false }).addTo(map);
+    else meAcc.setLatLng(ll).setRadius(p.coords.accuracy||0);
+    if (meHead==null && p.coords.heading!=null && !isNaN(p.coords.heading) && p.coords.speed>0.5) setHeading(p.coords.heading); // fall back to travel direction
+    if (meFollow && !R.nav) centerVisible(ll, first ? Math.max(map.getZoom(),15) : map.getZoom(), !first);
+  }, e=>{ if (e.code===1){ toast("Location is turned off for this site. Allow it in your browser's settings."); meStop(); } }, { enableHighAccuracy:true, maximumAge:5000 });
+  meState();
+}
+function meStop(){ if (meWatch!==null) navigator.geolocation.clearWatch(meWatch); meWatch=null; meFollow=false; meLast=null;
+  [meMarker, meAcc].forEach(l=>l&&map.removeLayer(l)); meMarker=meAcc=null; meState(); }
+$("#locBtn").onclick=()=>{ startCompass();
+  if (meWatch!==null && meFollow){ meStop(); return; }
+  meStart(true); if (meLast) centerVisible(meLast, Math.max(map.getZoom(),15), true); };
+map.on("dragstart", ()=>{ if (meFollow){ meFollow=false; meState(); } });
+/* Like Google Maps, show and center on your location at start when the browser already allows it. */
+navigator.permissions?.query({ name:"geolocation" }).then(st=>{ if (st.state==="granted" && !location.hash.startsWith("#import=")){ meStart(true);
+  if (typeof DeviceOrientationEvent!=="undefined" && DeviceOrientationEvent.requestPermission) document.addEventListener("click", startCompass, { once:true }); // iPhone asks on the first tap
+  else startCompass(); } }).catch(()=>{});
 
 /* ================= panel ================= */
 const sizes=["peek","half","full"];
@@ -1981,7 +2019,7 @@ function startNav(t){
   const nv=Object.assign(navPath(t), { t, follow:true, isOff:false, last:null, s:null });
   nv.line=L.polyline(t.segs, { color:css(DCOL[difficulty(t)]), weight:5, opacity:.9, interactive:false }).addTo(map);
   nv.acc=L.circle(t.head, { radius:1, color:"#2b7bf3", weight:1, fillOpacity:.12, interactive:false });
-  nv.me=L.marker(t.head, { icon:L.divIcon({ className:"me", iconSize:[16,16] }), interactive:false, zIndexOffset:1000 });
+  nv.me=L.marker(t.head, { icon:meIcon(), interactive:false, zIndexOffset:1001 }); startCompass();
   R.nav=nv; document.body.classList.add("navving"); navWakeLock();
   nv.watch=navigator.geolocation.watchPosition(navFix, e=>{ nv.err=e.code===1 ? "Location is turned off for this site. Allow it in your browser's settings." : "Waiting for a GPS signal…"; navDraw(); },
     { enableHighAccuracy:true, maximumAge:3000, timeout:30000 });
@@ -1995,13 +2033,14 @@ function stopNav(silent){ const nv=R.nav; if (!nv) return;
 function navFix(p){ const nv=R.nav; if (!nv) return;
   const ll=[p.coords.latitude, p.coords.longitude], acc=p.coords.accuracy||0, first=!nv.last;
   nv.last={ ll, acc }; nv.err=null;
-  if (!map.hasLayer(nv.me)){ nv.acc.addTo(map); nv.me.addTo(map); }
+  if (!map.hasLayer(nv.me)){ nv.acc.addTo(map); nv.me.addTo(map); setHeading(meHead); }
+  if (meHead==null && p.coords.heading!=null && !isNaN(p.coords.heading) && p.coords.speed>0.5) setHeading(p.coords.heading);
   nv.me.setLatLng(ll); nv.acc.setLatLng(ll).setRadius(acc);
   nv.s=snapTo(nv, ll);
   const off=nv.s.off > Math.max(60, acc); // allow for GPS error before calling it off trail
   if (off && !nv.isOff) navigator.vibrate?.([250,120,250]);
   nv.isOff=off;
-  if (nv.follow) map.setView(ll, first ? 16 : map.getZoom(), { animate:!first });
+  if (nv.follow) centerVisible(ll, first ? 16 : map.getZoom(), !first);
   navDraw();
 }
 function navDraw(){
