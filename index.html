@@ -895,7 +895,7 @@ body.mapfull .leaflet-bottom{bottom:0}
   body.mapfull .areabtn,body.mapfull .toast{left:50%}
 }
 body.navving .mapbtn{display:none}
-.mfgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 12px;margin-top:4px}.mfgrid label{display:flex;align-items:center;gap:6px;font-size:.92rem}.mfgrid label:nth-child(1),.mfgrid label:nth-child(2),.mfgrid label:nth-child(6),.mfgrid label:nth-child(7){grid-column:1/-1}.mfgrid input{width:18px;height:18px;margin:0}
+.mfgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 12px;margin-top:4px}.mfgrid label{display:flex;align-items:center;gap:6px;font-size:.92rem}.mfgrid label:nth-child(1),.mfgrid label:nth-child(2),.mfgrid label:nth-child(6),.mfgrid label:nth-child(7),.mfgrid label:nth-child(8){grid-column:1/-1}.mfgrid input{width:18px;height:18px;margin:0}
 /* trail preview card */
 .pv{position:fixed;z-index:17;left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);background:var(--panel);color:var(--ink);border-radius:16px;box-shadow:0 8px 28px rgba(0,0,0,.3);padding:10px;max-width:520px;margin:0 auto}
 .pv[hidden]{display:none}
@@ -981,6 +981,7 @@ body.pving .leaflet-bottom{bottom:calc(var(--pvh,170px) + 14px)}
     <label><input type="checkbox" data-mf="hard"> <span class="chip hard">hard</span></label>
     <label><input type="checkbox" data-mf="pop"> Only popular trails (AllTrails top 10)</label>
     <label><input type="checkbox" data-mf="hideDone"> Hide trails I've completed</label>
+    <label><input type="checkbox" data-mf="headsOnly"> Show only trailheads on the overview (the full trail shows when you pick one)</label>
   </div>
   <p class="note" style="margin:4px 0 0">These also apply to the trail list. Activity, difficulty and length menus above the list still work too.</p>
   <div class="lab">Units</div>
@@ -1259,8 +1260,14 @@ map.on("moveend", ()=>{
 function drawTrails(){
   trailLayer.clearLayers();
   if (R.tab!=="explore") return;
+  const heads=mapF().headsOnly;
   for (const t of visibleTrails()){
     const col=css(DCOL[difficulty(t)]);
+    if (heads){ // overview shows trailheads only; the full line appears once a trail is picked
+      const pin=L.circleMarker(t.head, { radius:8, color:"#fff", weight:2.5, fillColor:col, fillOpacity:1 }).addTo(trailLayer);
+      const hit=L.circleMarker(t.head, { radius:18, stroke:false, fillOpacity:0 }).addTo(trailLayer);
+      [pin,hit].forEach(l=>{ l.on("click", e=>{ L.DomEvent.stop(e); previewTrail(t.id, visibleTrails().map(x=>x.id)); }); l.bindTooltip(t.name); });
+      t._line=pin; continue; }
     const line=L.polyline(t.segs, { color:col, weight:4, opacity:.85 }).addTo(trailLayer);
     const hit=L.polyline(t.segs, { color:"#000", weight:18, opacity:0 }).addTo(trailLayer); // fat tap target
     const dot=L.circleMarker(t.head, { radius:5, color:"#fff", weight:2, fillColor:css("--accent"), fillOpacity:1 }).addTo(trailLayer);
@@ -1268,7 +1275,7 @@ function drawTrails(){
     t._line=line;
   }
 }
-function highlight(id, on){ const t=R.byId[id]; if (t?._line) t._line.setStyle({ weight:on?7:4, opacity:on?1:.85 }); }
+function highlight(id, on){ const t=R.byId[id]; if (!t?._line) return; if (t._line.setRadius) t._line.setRadius(on?11:8); else t._line.setStyle({ weight:on?7:4, opacity:on?1:.85 }); }
 
 /* ================= searching ================= */
 async function searchArea(){
@@ -1290,10 +1297,11 @@ node["highway"="trailhead"](${bb});
 out;
 nwr["amenity"="parking"](${bb});
 out center;`;
-  R.center=[c.lat,c.lng]; R.searching=true; R.searchErr=null; R.trails=[]; R.byId={}; render();
+  R.center=[c.lat,c.lng]; R.searching=true; R.searchErr=null; R.byId={};
+  R.lastBB=[s-(n-s)/4, w-(e-w)/4, n+(n-s)/4, e+(e-w)/4]; setTrails(mergeAT(R.lastBB, [])); render(); // AllTrails trails right away
   try {
     const t=buildTrails(await overpass(q, ()=>{ const c=$(".count"); if (c) c.innerHTML='<span class="spin"></span> The trail server is slow, trying a backup server…'; }));
-    R.trails=t; R.byId=Object.fromEntries(t.map(x=>[x.id,x])); R.lastBB=[s-(n-s)/4, w-(e-w)/4, n+(n-s)/4, e+(e-w)/4]; mergeAT(R.lastBB);
+    setTrails(mergeAT(R.lastBB, t));
   } catch(e){ R.searchErr=navigator.onLine===false ? "You're offline." : "The OpenStreetMap trail servers are overloaded right now. Wait a few seconds and tap Try again."; }
   R.searching=false; render(); prefetchElev();
 }
@@ -1308,7 +1316,7 @@ async function prefetchElev(){ // fill in climb for the nearest trails, one requ
     if (run===prefetchRun && R.tab==="explore" && !R.sel){ const y=$("#body").scrollTop; render(); $("#body").scrollTop=y; }
   }
 }
-function mapF(){ return Object.assign({ at:true, osm:true, easy:true, moderate:true, hard:true, pop:false, hideDone:false }, S.mf||{}); }
+function mapF(){ return Object.assign({ at:true, osm:true, easy:true, moderate:true, hard:true, pop:false, hideDone:false, headsOnly:false }, S.mf||{}); }
 function mapFOn(){ const m=mapF(); return !(m.at&&m.osm&&m.easy&&m.moderate&&m.hard&&!m.pop&&!m.hideDone); }
 function visibleTrails(){
   const f=R.filt, m=mapF(); let t=R.trails.slice();
@@ -1321,7 +1329,8 @@ function visibleTrails(){
   const dist=x=>R.center?fd(R.center,x.head):0;
   const tier=x=>(x.osm?.t==="r"?0:x.official?1:2);
   const pr=x=>atFor(x)?.p??999;
-  const sorts={ best:(a,b)=>tier(a)-tier(b)||dist(a)-dist(b), pop:(a,b)=>pr(a)-pr(b)||tier(a)-tier(b)||dist(a)-dist(b), near:(a,b)=>dist(a)-dist(b), short:(a,b)=>a.len-b.len, long:(a,b)=>b.len-a.len, name:(a,b)=>a.name.localeCompare(b.name) };
+  const atr=x=>{ const a=atFor(x); return a ? (a.p||50) : 999; };
+  const sorts={ best:(a,b)=>atr(a)-atr(b)||tier(a)-tier(b)||dist(a)-dist(b), pop:(a,b)=>pr(a)-pr(b)||tier(a)-tier(b)||dist(a)-dist(b), near:(a,b)=>dist(a)-dist(b), short:(a,b)=>a.len-b.len, long:(a,b)=>b.len-a.len, name:(a,b)=>a.name.localeCompare(b.name) };
   return t.sort(sorts[f.sort]);
 }
 
@@ -1437,11 +1446,13 @@ function renderExplore(b){
     <select id="fLen" aria-label="Length">${opt("","Any length",f.len)}${opt("s",imp()?"Under 3 mi":"Under 5 km",f.len)}${opt("m",imp()?"3 to 8 mi":"5 to 13 km",f.len)}${opt("l",imp()?"Over 8 mi":"Over 13 km",f.len)}</select>
     <select id="fSort" aria-label="Sort">${opt("best","Recommended",f.sort)}${opt("pop","Most popular",f.sort)}${opt("near","Nearest",f.sort)}${opt("short","Shortest",f.sort)}${opt("long","Longest",f.sort)}${opt("name","A to Z",f.sort)}</select>
   </div>`;
-  if (R.searching) h+=`<p class="count"><span class="spin"></span> Looking for trails…</p>`;
-  else if (R.searchErr) h+=`<div class="empty"><strong>Search failed</strong>${esc(R.searchErr)}<p><button class="btn" id="retry">Try again</button></p></div>`;
+  if (R.searching && !R.trails.length) h+=`<p class="count"><span class="spin"></span> Looking for trails…</p>`;
+  else if (R.searchErr && !R.trails.length) h+=`<div class="empty"><strong>Search failed</strong>${esc(R.searchErr)}<p><button class="btn" id="retry">Try again</button></p></div>`;
   else if (!R.center) h+=`<div class="empty"><strong>Find a trail</strong>Search a town or park above, or pan the map and tap <em>Search trails in this area</em>.<p><button class="btn primary" id="nearMe">Trails near me</button></p></div>`;
   else { const v=visibleTrails();
     const nb=R.trails.filter(x=>x.kind==="bike").length;
+    if (R.searching) h+=`<p class="count"><span class="spin"></span> AllTrails trails shown. Loading more from OpenStreetMap…</p>`;
+    else if (R.searchErr) h+=`<p class="count">OpenStreetMap is busy, so only AllTrails trails are shown. <a href="#" id="retry">Try again</a></p>`;
     h+=`<p class="count">${v.length} trail${v.length===1?"":"s"} in this area${f.act==="hike"&&nb?` · ${nb} bike trail${nb===1?"":"s"} hidden`:""}${mapFOn()?` · <a href="#" id="mfLink">map filters on</a>`:""}</p>`;
     h+= v.length ? v.map(t=>card(t)).join("") : `<div class="empty"><strong>No trails here</strong>OpenStreetMap has no named trails in this view. Try zooming out or another area.</div>`;
     const ao=atOnly(); if (ao.length) h+=`<div class="lab atlab">More on AllTrails (${ao.length})</div><p class="note" style="margin:0 0 8px">AllTrails routes with no matching trail on the map here. Tap one to find it on the map, then view and save it like any trail.</p>`+ao.map(atCard).join(""); }
@@ -2052,7 +2063,7 @@ addEventListener("online", ()=>{ R.hwxTry=0; refreshStaleWeather(); });
 /* alltrails.json holds AllTrails trails fetched through the AllTrails connector, per area. AllTrails gives no coordinates,
    so these are matched to mapped trails by name; the rest are listed separately and open on AllTrails. */
 let AT=null;
-if (/^https?:/.test(location.protocol)) fetch("alltrails.json").then(r=>r.ok?r.json():null).then(d=>{ if (d){ AT=d; if (R.lastBB && R.trails.length) mergeAT(R.lastBB); render(); } }).catch(()=>{});
+if (/^https?:/.test(location.protocol)) fetch("alltrails.json").then(r=>r.ok?r.json():null).then(d=>{ if (d){ AT=d; if (R.lastBB) setTrails(mergeAT(R.lastBB, R.trails)); render(); } }).catch(()=>{});
 const atNorm=s=>String(s).normalize("NFD").toLowerCase().replace(/\(.*?\)/g,"").replace(/[\u0300-\u036f\u02bb\u02bc‘’'.]/g,"").replace(/\b(the|trail|trailhead|loop|mount|mt)\b/g,m=>m==="mount"||m==="mt"?"mt":"").replace(/[^a-z0-9]+/g," ").trim();
 const AT_DIFF={ Easy:"easy", Moderate:"moderate", Hard:"hard", Strenuous:"hard" };
 function atAreas(){ if (!AT||!R.center) return [];
@@ -2086,16 +2097,22 @@ function atGeoTrail(x, area){
   return t; }
 function sameOsm(a,b){ return a&&b&&a.t===b.t&&a.ids.some(i=>b.ids.includes(i)); }
 // Put AllTrails trails that have a known map line into the current results, so they draw on the map and open like any trail.
-function mergeAT(bounds){
-  if (!AT) return; const [s,w,n,e]=bounds;
+// AllTrails trails with a known map line, inside the search box. They come from the bundled file, so they show instantly.
+function atLayer(bounds){ if (!AT||!bounds) return []; const [s,w,n,e]=bounds, out=[], seen=new Set();
   for (const a of atAreas()) for (const x of a.trails){
-    const k=atNorm(x.n), named=R.trails.find(t=>atNorm(t.name)===k); if (named){ named.atId=named.atId||x.id; continue; }
-    if (!x.geo || R.trails.some(t=>t.atId===x.id)) continue;
-    const g=atOsm(x.geo.o), same=R.trails.find(t=>sameOsm(t.osm,g));
-    if (same){ if (!same.atId) same.atId=x.id; continue; } // same line already listed under its map name
-    const t=atGeoTrail(x, a); const [bs,bw,bn,be]=t.bbox;
-    if (bn<s||bs>n||be<w||bw>e) continue; // not in this search area
-    R.trails.push(t); R.byId[t.id]=t; } }
+    if (!x.geo || seen.has(x.geo.o)) continue;
+    const t=R.byId["at"+x.id] || atGeoTrail(x, a), [bs,bw,bn,be]=t.bbox;
+    if (bn<s||bs>n||be<w||bw>e) continue;
+    seen.add(x.geo.o); out.push(t); }
+  return out; }
+function atByName(k){ for (const a of (AT?.areas||[])) for (const x of a.trails) if (atNorm(x.n)===k) return x; return null; }
+// AllTrails versions first; OpenStreetMap trails that duplicate one of them are dropped, the rest get linked by name when possible.
+function mergeAT(bounds, osm){ const at=atLayer(bounds);
+  const rest=osm.filter(t=>{ if (t.atId && t.id.startsWith("at")) return false; const k=atNorm(t.name);
+    if (at.some(x=>atNorm(x.name)===k || sameOsm(x.osm, t.osm))) return false;
+    if (!t.atId){ const x=atByName(k); if (x) t.atId=x.id; } return true; });
+  return at.concat(rest); }
+function setTrails(list){ R.trails=list; R.byId=Object.fromEntries(list.map(x=>[x.id,x])); }
 async function openAT(id){
   const x=atById(id); if (!x) return;
   const hit=R.trails.find(t=>t.atId===id || atNorm(t.name)===atNorm(x.n)); if (hit) return previewTrail(hit.id);
