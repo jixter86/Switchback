@@ -17,7 +17,8 @@ jobs:
       - name: Probe Overpass with a real query
         run: curl -s -m 60 -X POST --data-urlencode 'data=[out:json][timeout:30];(relation["route"~"^(hiking|foot|walking)$"](47.40,-121.90,47.60,-121.60););out tags 3;' https://overpass-api.de/api/interpreter | head -c 600; echo
       - name: CORS check for Overpass mirrors
-        run: for u in https://overpass-api.de/api/interpreter https://overpass.private.coffee/api/interpreter https://maps.mail.ru/osm/tools/overpass/api/interpreter; do echo "$u $(curl -s -m 30 -o /dev/null -D - -H 'Origin: https://jixter86.github.io' --data-urlencode 'data=[out:json];node(1);out;' $u | grep -i -E '^HTTP|access-control-allow-origin' | tr -d '\r' | tr '\n' ' ')"; done
+        run: |
+          for u in https://overpass-api.de/api/interpreter https://overpass.private.coffee/api/interpreter https://maps.mail.ru/osm/tools/overpass/api/interpreter; do echo "$u $(curl -s -m 30 -o /dev/null -D - -H 'Origin: https://jixter86.github.io' --data-urlencode 'data=[out:json];node(1);out;' $u | grep -i -E '^HTTP|access-control-allow-origin' | tr -d '\r' | tr '\n' ' ')"; done
       - run: sleep 75 && mkdir -p shots && node tests/live.mjs
       - uses: actions/upload-artifact@v4
         if: always()
