@@ -884,14 +884,16 @@ const DEF = { units:"imp", home:null, view:null,
   lists:{ want:{ name:"Want to go", ids:[] }, done:{ name:"Completed", ids:[] } },
   saved:{}, recs:[], elev:{} };
 let S = load();
+let savedAct; try { savedAct=localStorage.getItem(KEY+".act"); } catch(e){}
 function load(){
   try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.lists) return Object.assign(structuredClone(DEF), s); } catch(e){}
   return structuredClone(DEF);
 }
 function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){ toast("Storage is full or blocked; changes may not stick."); } }
 
-const R = { tab:"explore", trails:[], byId:{}, sel:null, filt:{ diff:"", len:"", sort:"near" }, center:null,
+const R = { tab:"explore", trails:[], byId:{}, sel:null, filt:{ act:"hike", diff:"", len:"", sort:"best" }, center:null,
   searching:false, searchErr:null, wx:{}, drive:{}, rec:null, layers:{} };
+if (/^(hike|bike|all)$/.test(savedAct||"")) R.filt.act=savedAct;
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
@@ -1020,6 +1022,25 @@ function pickHead(t, heads, parks){
   if (best) return best;
   return { p:(t.ends[0]||verts[0]), src:"Trail end (no signed trailhead nearby)" };
 }
+/* What AllTrails-style lists leave out: connectors and spurs, roads, unofficial or abandoned bits, and short pieces. */
+const CONNECTOR=/connector|connection|crossover|collector|cut-?off|\bspur\b|\balt(ernate|ernative)?\b|alt route|\baccess\b|optional|\blink\b/i;
+function isNoise(name, tagList, len){
+  if (CONNECTOR.test(name)) return true;
+  if (/\b(road|rd|street|st|avenue|ave|highway|hwy|drive)\b/i.test(name) && !/trail/i.test(name)) return true;
+  if (/abandoned|^\d+(\.\d+)?$/i.test(name)) return true;
+  if (tagList.every(t=>t.informal==="yes")) return true;
+  if (tagList.every(t=>t.path==="climbing_access")) return true;
+  return len < 800; // under ~0.5 mi one way: a connector or stub, not a hike
+}
+/* bike = built for mountain bikes; shared = paved or rail trails meant for both; hike = everything else. */
+function trailKind(tagList, name){
+  const any=f=>tagList.some(f);
+  if (any(t=>t["mtb:scale"]!=null || t["mtb:scale:imba"]!=null || t.mtb==="designated")) return "bike";
+  if (any(t=>t.bicycle==="designated" && t.foot==="designated") || any(t=>t.railtrail==="yes")) return "shared";
+  if (any(t=>t.bicycle==="designated" || t.highway==="cycleway")) return "bike";
+  if (any(t=>t.bicycle==="yes") && !any(t=>t.foot||t.sac_scale) && !/trail|loop|path|walk|hike/i.test(name)) return "bike"; // bike-park lines often only say bicycle=yes
+  return "hike";
+}
 function buildTrails(json){
   const rels=[], ways=[], heads=[], parks=[];
   for (const e of json.elements||[]){
@@ -1034,15 +1055,16 @@ function buildTrails(json){
     for (const m of r.members||[]){ if (m.type!=="way") continue; inRel.add(m.ref);
       const g=(m.geometry||[]).filter(Boolean).map(p=>[p.lat,p.lon]); if (g.length>1) segs.push(g); else missing++; }
     if (!segs.length) continue;
-    out.push(makeTrail("r"+r.id, r.tags?.name || r.tags?.ref || "Unnamed route", segs, r.tags, { t:"r", ids:[r.id] }, missing>0));
+    const rt=makeTrail("r"+r.id, r.tags?.name || r.tags?.ref || "Unnamed route", segs, r.tags, { t:"r", ids:[r.id] }, missing>0);
+    if (CONNECTOR.test(rt.name)) continue;
+    rt.kind="hike"; rt.official=true; out.push(rt);
   }
   // Named paths that are not part of a route relation: join same-name pieces that touch.
   const byName={};
   for (const w of ways){
     const t=w.tags; if (!t.name || inRel.has(w.id)) continue;
-    if (t.footway==="sidewalk"||t.footway==="crossing"||t.access==="private"||t.area==="yes") continue;
-    if (t["mtb:scale"]!=null && !/^(yes|designated|permissive)$/.test(t.foot||"") && !t.sac_scale) continue; // bike-park lines
-    if (t.foot==="no") continue;
+    if (t.footway==="sidewalk"||t.footway==="crossing"||t.area==="yes") continue;
+    if (/^(private|no|customers|permit)$/.test(t.access||"") || /^(private|customers)$/.test(t.foot||"")) continue; // not open to the public
     if (t.highway==="track" && !t.sac_scale && !/trail|path|loop/i.test(t.name)) continue; // forest roads
     if (t.highway==="footway" && /^(asphalt|concrete|paving_stones|sett|paved)/.test(t.surface||"")) continue; // town footpaths
     if (/^(yes|designated)$/.test(t.motor_vehicle||t.motorcycle||t.atv||"") || /\bOHV\b|\bATV\b/i.test(t.name)) continue; // motorised
@@ -1057,8 +1079,11 @@ function buildTrails(json){
     for (const g of Object.values(groups)){
       const segs=g.map(w=>w.g).filter(s=>s.length>1); if (!segs.length) continue;
       const ids=g.map(w=>w.id).sort((a,b)=>a-b);
-      const t=makeTrail("w"+ids[0]+"-"+ids.length, name, segs, g[0].tags, { t:"w", ids }, false);
-      if (t.len>=300) out.push(t);
+      const all=Object.assign({}, ...g.map(w=>w.tags)); // any piece's tags count for the whole trail
+      const t=makeTrail("w"+ids[0]+"-"+ids.length, name, segs, all, { t:"w", ids }, false);
+      if (isNoise(name, g.map(w=>w.tags), t.len)) continue;
+      t.kind=trailKind(g.map(w=>w.tags), name); t.official=g.some(w=>w.tags.foot==="designated"||w.tags.sac_scale||w.tags.operator);
+      out.push(t);
     }
   }
   for (const t of out){ const h=pickHead(t, heads, parks); t.head=h.p; t.headSrc=h.src; if (S.elev[t.id]) t.elev=S.elev[t.id]; }
@@ -1142,11 +1167,13 @@ async function prefetchElev(){ // fill in climb for the nearest trails, one requ
 }
 function visibleTrails(){
   const f=R.filt; let t=R.trails.slice();
+  if (f.act==="hike") t=t.filter(x=>x.kind!=="bike"); else if (f.act==="bike") t=t.filter(x=>x.kind!=="hike");
   if (f.diff) t=t.filter(x=>difficulty(x)===f.diff);
   if (f.len){ const mi=x=>(x.loop?x.len:x.len*2)/1609.344;
     t=t.filter(x=> f.len==="s" ? mi(x)<3 : f.len==="m" ? mi(x)>=3&&mi(x)<=8 : mi(x)>8); }
   const dist=x=>R.center?fd(R.center,x.head):0;
-  const sorts={ near:(a,b)=>dist(a)-dist(b), short:(a,b)=>a.len-b.len, long:(a,b)=>b.len-a.len, name:(a,b)=>a.name.localeCompare(b.name) };
+  const tier=x=>(x.osm?.t==="r"?0:x.official?1:2);
+  const sorts={ best:(a,b)=>tier(a)-tier(b)||dist(a)-dist(b), near:(a,b)=>dist(a)-dist(b), short:(a,b)=>a.len-b.len, long:(a,b)=>b.len-a.len, name:(a,b)=>a.name.localeCompare(b.name) };
   return t.sort(sorts[f.sort]);
 }
 
@@ -1198,7 +1225,7 @@ function card(t, extra){
   const dist=R.center && R.tab==="explore" ? fd(R.center,t.head) : null;
   return `<button class="card" data-id="${esc(t.id)}">
     <span class="nm">${esc(t.name)}${saved?" <span title='Saved' style='color:var(--accent)'>&#9829;</span>":""}</span>
-    <span class="meta"><span class="chip ${d}">${d}</span><span>${fmtLen(t.loop?t.len:t.len*2)} ${t.loop?"loop":"round trip"}</span>${t.elev?`<span>&#8599; ${fmtEl(t.elev.gain+(t.loop?0:t.elev.loss))}</span>`:""}${dist!=null?`<span>${fmtLen(dist)} away</span>`:""}${extra||""}</span>
+    <span class="meta"><span class="chip ${d}">${d}</span>${t.kind==="bike"?'<span class="chip plain">Bike trail</span>':t.kind==="shared"?'<span class="chip plain">Hike + bike</span>':""}<span>${fmtLen(t.loop?t.len:t.len*2)} ${t.loop?"loop":"round trip"}</span>${t.elev?`<span>&#8599; ${fmtEl(t.elev.gain+(t.loop?0:t.elev.loss))}</span>`:""}${dist!=null?`<span>${fmtLen(dist)} away</span>`:""}${extra||""}</span>
   </button>`;
 }
 function bindCards(root){ root.querySelectorAll(".card").forEach(c=>{ c.onclick=()=>openTrail(c.dataset.id);
@@ -1208,17 +1235,20 @@ function renderExplore(b){
   const f=R.filt;
   const opt=(v,l,cur)=>`<option value="${v}"${v===cur?" selected":""}>${l}</option>`;
   let h=`<div class="filters">
+    <select id="fAct" aria-label="Activity">${opt("hike","Hiking",f.act)}${opt("bike","Biking",f.act)}${opt("all","Hike + bike",f.act)}</select>
     <select id="fDiff" aria-label="Difficulty">${opt("","Any difficulty",f.diff)}${opt("easy","Easy",f.diff)}${opt("moderate","Moderate",f.diff)}${opt("hard","Hard",f.diff)}</select>
     <select id="fLen" aria-label="Length">${opt("","Any length",f.len)}${opt("s",imp()?"Under 3 mi":"Under 5 km",f.len)}${opt("m",imp()?"3 to 8 mi":"5 to 13 km",f.len)}${opt("l",imp()?"Over 8 mi":"Over 13 km",f.len)}</select>
-    <select id="fSort" aria-label="Sort">${opt("near","Nearest",f.sort)}${opt("short","Shortest",f.sort)}${opt("long","Longest",f.sort)}${opt("name","A to Z",f.sort)}</select>
+    <select id="fSort" aria-label="Sort">${opt("best","Recommended",f.sort)}${opt("near","Nearest",f.sort)}${opt("short","Shortest",f.sort)}${opt("long","Longest",f.sort)}${opt("name","A to Z",f.sort)}</select>
   </div>`;
   if (R.searching) h+=`<p class="count"><span class="spin"></span> Looking for trails…</p>`;
   else if (R.searchErr) h+=`<div class="empty"><strong>Search failed</strong>${esc(R.searchErr)}<p><button class="btn" id="retry">Try again</button></p></div>`;
   else if (!R.center) h+=`<div class="empty"><strong>Find a trail</strong>Search a town or park above, or pan the map and tap <em>Search trails in this area</em>.<p><button class="btn primary" id="nearMe">Trails near me</button></p></div>`;
   else { const v=visibleTrails();
-    h+=`<p class="count">${v.length} trail${v.length===1?"":"s"}${v.length!==R.trails.length?` (of ${R.trails.length})`:""} in this area</p>`;
+    const nb=R.trails.filter(x=>x.kind==="bike").length;
+    h+=`<p class="count">${v.length} trail${v.length===1?"":"s"} in this area${f.act==="hike"&&nb?` · ${nb} bike trail${nb===1?"":"s"} hidden`:""}</p>`;
     h+= v.length ? v.map(t=>card(t)).join("") : `<div class="empty"><strong>No trails here</strong>OpenStreetMap has no named trails in this view. Try zooming out or another area.</div>`; }
   b.innerHTML=h;
+  $("#fAct").onchange=e=>{ f.act=e.target.value; try { localStorage.setItem(KEY+".act", f.act); } catch(_){} render(); prefetchElev(); };
   $("#fDiff").onchange=e=>{ f.diff=e.target.value; render(); };
   $("#fLen").onchange=e=>{ f.len=e.target.value; render(); };
   $("#fSort").onchange=e=>{ f.sort=e.target.value; render(); prefetchElev(); };
@@ -1282,7 +1312,7 @@ function renderDetail(b){
   const [lv,lu]=fmtLenV(rtLen), ev=upRt!=null?fmtElV(upRt):null;
   let h=`<button class="back" id="back">&#8592; ${R.tab==="explore"?"All trails":R.tab==="saved"?"Saved":"Back"}</button>
   <h2 class="dname">${esc(t.name)}</h2>
-  <div class="row"><span class="chip ${d}">${d}</span><span class="chip plain">${t.loop?"Loop":"Out &amp; back"}</span>${t.partial?`<span class="chip plain" title="Part of this route is outside the searched area">Section shown</span>`:""}${t.tags?.network&&/^(n|i)wn$/.test(t.tags.network)?`<span class="chip plain">Long-distance</span>`:""}</div>
+  <div class="row"><span class="chip ${d}">${d}</span><span class="chip plain">${t.loop?"Loop":"Out &amp; back"}</span>${t.kind==="bike"?'<span class="chip plain">Bike trail</span>':t.kind==="shared"?'<span class="chip plain">Hike + bike</span>':""}${t.partial?`<span class="chip plain" title="Part of this route is outside the searched area">Section shown</span>`:""}${t.tags?.network&&/^(n|i)wn$/.test(t.tags.network)?`<span class="chip plain">Long-distance</span>`:""}</div>
   <div class="stats">
     <div class="stat"><div class="v">${lv} <small>${lu}</small></div><div class="k">${t.loop?"Loop length":"Round trip"}</div></div>
     <div class="stat"><div class="v">${ev?`${ev[0]} <small>${ev[1]}</small>`:t.elevErr?"—":'<span class="spin"></span>'}</div><div class="k">Elev. gain</div></div>
@@ -1374,7 +1404,7 @@ function bindProfile(t){
 }
 
 /* ================= saved lists ================= */
-function snapshot(t){ return { id:t.id, name:t.name, osm:t.osm, head:t.head.map(x=>+x.toFixed(6)), headSrc:t.headSrc, len:Math.round(t.len), loop:t.loop, partial:t.partial, tags:t.tags,
+function snapshot(t){ return { id:t.id, name:t.name, osm:t.osm, head:t.head.map(x=>+x.toFixed(6)), headSrc:t.headSrc, kind:t.kind||"hike", official:!!t.official, len:Math.round(t.len), loop:t.loop, partial:t.partial, tags:t.tags,
   segs:t.segs?t.segs.map(s=>simplify(s,4).map(p=>[+p[0].toFixed(5),+p[1].toFixed(5)])):null, bbox:t.bbox, ends:t.ends, elev:t.elev||S.elev[t.id]||null,
   notes:S.saved[t.id]?.notes||"", hiked:S.saved[t.id]?.hiked||"", added:S.saved[t.id]?.added||Date.now() }; }
 function savedTrail(id){ return S.saved[id] ? Object.assign({}, S.saved[id]) : null; }
