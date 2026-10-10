@@ -895,6 +895,7 @@ body.mapfull .leaflet-bottom{bottom:0}
   body.mapfull .areabtn,body.mapfull .toast{left:50%}
 }
 body.navving .mapbtn{display:none}
+.mfgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 12px;margin-top:4px}.mfgrid label{display:flex;align-items:center;gap:6px;font-size:.92rem}.mfgrid label:nth-child(1),.mfgrid label:nth-child(2),.mfgrid label:nth-child(6),.mfgrid label:nth-child(7){grid-column:1/-1}.mfgrid input{width:18px;height:18px;margin:0}
 /* trail preview card */
 .pv{position:fixed;z-index:17;left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);background:var(--panel);color:var(--ink);border-radius:16px;box-shadow:0 8px 28px rgba(0,0,0,.3);padding:10px;max-width:520px;margin:0 auto}
 .pv[hidden]{display:none}
@@ -971,6 +972,17 @@ body.pving .leaflet-bottom{bottom:calc(var(--pvh,170px) + 14px)}
 
 <dialog id="settings">
   <h2>Settings</h2>
+  <div class="lab">Trails on the map</div>
+  <div class="mfgrid" id="mapFilt">
+    <label><input type="checkbox" data-mf="at"> <span class="chip at">AllTrails</span> trails</label>
+    <label><input type="checkbox" data-mf="osm"> Other OpenStreetMap trails</label>
+    <label><input type="checkbox" data-mf="easy"> <span class="chip easy">easy</span></label>
+    <label><input type="checkbox" data-mf="moderate"> <span class="chip moderate">moderate</span></label>
+    <label><input type="checkbox" data-mf="hard"> <span class="chip hard">hard</span></label>
+    <label><input type="checkbox" data-mf="pop"> Only popular trails (AllTrails top 10)</label>
+    <label><input type="checkbox" data-mf="hideDone"> Hide trails I've completed</label>
+  </div>
+  <p class="note" style="margin:4px 0 0">These also apply to the trail list. Activity, difficulty and length menus above the list still work too.</p>
   <div class="lab">Units</div>
   <div class="seg" id="unitSeg"><button data-u="imp">Miles / ft</button><button data-u="met">Km / m</button></div>
   <div class="lab">Driving from (for drive times)</div>
@@ -1296,8 +1308,12 @@ async function prefetchElev(){ // fill in climb for the nearest trails, one requ
     if (run===prefetchRun && R.tab==="explore" && !R.sel){ const y=$("#body").scrollTop; render(); $("#body").scrollTop=y; }
   }
 }
+function mapF(){ return Object.assign({ at:true, osm:true, easy:true, moderate:true, hard:true, pop:false, hideDone:false }, S.mf||{}); }
+function mapFOn(){ const m=mapF(); return !(m.at&&m.osm&&m.easy&&m.moderate&&m.hard&&!m.pop&&!m.hideDone); }
 function visibleTrails(){
-  const f=R.filt; let t=R.trails.slice();
+  const f=R.filt, m=mapF(); let t=R.trails.slice();
+  t=t.filter(x=>{ const a=atFor(x); if (a? !m.at : !m.osm) return false; if (!m[difficulty(x)]) return false;
+    if (m.pop && !(a?.p && a.p<=10)) return false; if (m.hideDone && S.lists.done?.ids.includes(x.id)) return false; return true; });
   if (f.act==="hike") t=t.filter(x=>x.kind!=="bike"); else if (f.act==="bike") t=t.filter(x=>x.kind!=="hike");
   if (f.diff) t=t.filter(x=>difficulty(x)===f.diff);
   if (f.len){ const mi=x=>(x.loop?x.len:x.len*2)/1609.344;
@@ -1357,17 +1373,24 @@ function meStart(follow){
     else meAcc.setLatLng(ll).setRadius(p.coords.accuracy||0);
     if (meHead==null && p.coords.heading!=null && !isNaN(p.coords.heading) && p.coords.speed>0.5) setHeading(p.coords.heading); // fall back to travel direction
     if (meFollow && !R.nav) centerVisible(ll, first ? Math.max(map.getZoom(),15) : map.getZoom(), !first);
-  }, e=>{ if (e.code===1){ toast("Location is turned off for this site. Allow it in your browser's settings."); meStop(); } }, { enableHighAccuracy:true, maximumAge:5000 });
+    if (!S.locOn){ S.locOn=true; save(); }
+  }, e=>{ if (e.code===1){ toast("Location is turned off for this site. Allow it in your browser's settings."); S.locOn=false; save(); meStop(); } }, { enableHighAccuracy:true, maximumAge:5000 });
   meState();
 }
 function meStop(){ if (meWatch!==null) navigator.geolocation.clearWatch(meWatch); meWatch=null; meFollow=false; meLast=null;
   [meMarker, meAcc].forEach(l=>l&&map.removeLayer(l)); meMarker=meAcc=null; meState(); }
 $("#locBtn").onclick=()=>{ startCompass();
-  if (meWatch!==null && meFollow){ meStop(); return; }
+  if (meWatch!==null && meFollow){ meFollow=false; meState(); return; } // dot stays; just stop following
   meStart(true); if (meLast) centerVisible(meLast, Math.max(map.getZoom(),15), true); };
 map.on("dragstart", ()=>{ if (meFollow){ meFollow=false; meState(); } });
 /* Like Google Maps, show and center on your location at start when the browser already allows it. */
-navigator.permissions?.query({ name:"geolocation" }).then(st=>{ if (st.state==="granted" && !location.hash.startsWith("#import=")){ meStart(true);
+/* The blue dot stays on whenever location is allowed: start it at load if the browser says granted, or if it worked here before. */
+const meBoot=follow=>{ if (meWatch!==null) return; meStart(follow);
+  if (typeof DeviceOrientationEvent!=="undefined" && DeviceOrientationEvent.requestPermission) document.addEventListener("click", startCompass, { once:true });
+  else startCompass(); };
+if (S.locOn) meBoot(!location.hash.startsWith("#import="));
+document.addEventListener("visibilitychange", ()=>{ if (document.visibilityState==="visible" && S.locOn && meWatch===null) meBoot(false); });
+navigator.permissions?.query({ name:"geolocation" }).then(st=>{ if (st.state==="granted" && meWatch===null && !location.hash.startsWith("#import=")){ meStart(true);
   if (typeof DeviceOrientationEvent!=="undefined" && DeviceOrientationEvent.requestPermission) document.addEventListener("click", startCompass, { once:true }); // iPhone asks on the first tap
   else startCompass(); } }).catch(()=>{});
 
@@ -1419,11 +1442,12 @@ function renderExplore(b){
   else if (!R.center) h+=`<div class="empty"><strong>Find a trail</strong>Search a town or park above, or pan the map and tap <em>Search trails in this area</em>.<p><button class="btn primary" id="nearMe">Trails near me</button></p></div>`;
   else { const v=visibleTrails();
     const nb=R.trails.filter(x=>x.kind==="bike").length;
-    h+=`<p class="count">${v.length} trail${v.length===1?"":"s"} in this area${f.act==="hike"&&nb?` · ${nb} bike trail${nb===1?"":"s"} hidden`:""}</p>`;
+    h+=`<p class="count">${v.length} trail${v.length===1?"":"s"} in this area${f.act==="hike"&&nb?` · ${nb} bike trail${nb===1?"":"s"} hidden`:""}${mapFOn()?` · <a href="#" id="mfLink">map filters on</a>`:""}</p>`;
     h+= v.length ? v.map(t=>card(t)).join("") : `<div class="empty"><strong>No trails here</strong>OpenStreetMap has no named trails in this view. Try zooming out or another area.</div>`;
     const ao=atOnly(); if (ao.length) h+=`<div class="lab atlab">More on AllTrails (${ao.length})</div><p class="note" style="margin:0 0 8px">AllTrails routes with no matching trail on the map here. Tap one to find it on the map, then view and save it like any trail.</p>`+ao.map(atCard).join(""); }
     setTimeout(()=>bindAtCards(b),0);
   b.innerHTML=h;
+  const mfl=$("#mfLink"); if (mfl) mfl.onclick=e=>{ e.preventDefault(); openSettings(); };
   $("#fAct").onchange=e=>{ f.act=e.target.value; try { localStorage.setItem(KEY+".act", f.act); } catch(_){} render(); prefetchElev(); };
   $("#fDiff").onchange=e=>{ f.diff=e.target.value; render(); };
   $("#fLen").onchange=e=>{ f.len=e.target.value; render(); };
@@ -1735,6 +1759,8 @@ async function copy(text, msg){ try { await navigator.clipboard.writeText(text);
 function openSettings(){ const d=$("#settings");
   fillSettings(); if (!d.open) d.showModal(); }
 function fillSettings(){
+  const m=mapF(); document.querySelectorAll("#mapFilt [data-mf]").forEach(c=>{ c.checked=!!m[c.dataset.mf];
+    c.onchange=()=>{ S.mf=Object.assign(mapF(), { [c.dataset.mf]:c.checked }); save(); if (R.pv && !visibleTrails().some(x=>x.id===R.pv)) closePreview(); render(); }; });
   offlineStats().then(st=>{ if (st&&st.n) $("#offNote").textContent=`${st.n} map tiles stored${st.mb!=null?`, about ${st.mb} MB used by this app`:""}.`; });
   document.querySelectorAll("#unitSeg button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.u===S.units));
   $("#homeIn").value=S.home?.label||""; $("#homeNote").textContent=S.home?"Drive times start from "+S.home.label+".":"Not set yet."; }
