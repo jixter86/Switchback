@@ -1034,6 +1034,9 @@ function buildTrails(json){
   for (const w of ways){
     const t=w.tags; if (!t.name || inRel.has(w.id)) continue;
     if (t.footway==="sidewalk"||t.footway==="crossing"||t.access==="private"||t.area==="yes") continue;
+    if (t.highway==="track" && !t.sac_scale && !/trail|path|loop/i.test(t.name)) continue; // forest roads
+    if (t.highway==="footway" && /^(asphalt|concrete|paving_stones|sett|paved)/.test(t.surface||"")) continue; // town footpaths
+    if (/^(yes|designated)$/.test(t.motor_vehicle||t.motorcycle||t.atv||"") || /\bOHV\b|\bATV\b/i.test(t.name)) continue; // motorised
     (byName[t.name]=byName[t.name]||[]).push({ id:w.id, tags:t, g:w.geometry.filter(Boolean).map(p=>[p.lat,p.lon]) });
   }
   for (const [name, list] of Object.entries(byName)){
@@ -1132,7 +1135,8 @@ let sugT;
 $("#q").addEventListener("input", ()=>{ clearTimeout(sugT); const v=$("#q").value.trim(); if (v.length<3){ $("#suggest").classList.remove("show"); return; }
   sugT=setTimeout(async()=>{ try { showSuggest(await geocode(v)); } catch(e){} }, 300); });
 $("#searchForm").addEventListener("submit", async e=>{ e.preventDefault(); const v=$("#q").value.trim(); if (!v) return;
-  try { const r=await geocode(v); if (!r.length) { toast("No place called “"+v+"”. Try a nearby town or coordinates."); return; } goPlace(r[0]); }
+  try { const r=await geocode(v); if (!r.length) { toast("No place called “"+v+"”. Try a nearby town or coordinates."); return; }
+    if (r.length===1) goPlace(r[0]); else { showSuggest(r); toast("Pick the one you mean."); } }
   catch(err){ toast("Place search is unavailable right now."); } });
 function showSuggest(list){ const box=$("#suggest"); box.innerHTML="";
   list.forEach(p=>{ const b=document.createElement("button"); b.type="button"; b.innerHTML=esc(p.label)+" <small>"+esc(p.sub||"")+"</small>"; b.onclick=()=>goPlace(p); box.appendChild(b); });
@@ -1232,11 +1236,12 @@ async function loadExtras(t){
   if (!t.elev && t.segs) jobs.push((async()=>{ try {
       const path=orderPath(t.segs, t.head); const cum=[0];
       for (let i=1;i<path.length;i++){ const d=hav(path[i-1],path[i]); cum.push(cum[i-1]+(d>200?0:d)); } // ignore jumps between disconnected pieces
-      const total=cum[cum.length-1]||1, N=Math.min(100, Math.max(2,path.length)), samp=[], at=[];
+      const total=cum[cum.length-1]||1, N=Math.min(100, Math.max(5, Math.round(total/60)+1)), samp=[], at=[];
       let j=0; for (let k=0;k<N;k++){ const target=total*k/(N-1); while (j<cum.length-1 && cum[j+1]<target) j++;
         const seg=cum[j+1]-cum[j]||1, f=Math.min(1,Math.max(0,(target-cum[j])/seg)), a=path[j], b=path[Math.min(j+1,path.length-1)];
         samp.push([a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f]); at.push(target); }
-      const el=await getElev(samp);
+      const raw=await getElev(samp);
+      const el=raw.map((_,i)=>{ let a=0,n=0; for (let k=i-2;k<=i+2;k++) if (raw[k]!=null){ a+=raw[k]; n++; } return a/n; }); // the DEM is ~90 m, so smooth its steps
       let gain=0, loss=0, ref=el[0]; for (const v of el){ if (v-ref>=4){ gain+=v-ref; ref=v; } else if (ref-v>=4){ loss+=ref-v; ref=v; } }
       t.elev={ gain, loss, max:Math.max(...el), min:Math.min(...el), prof:el.map((e,i)=>[Math.round(at[i]), Math.round(e)]), pts:samp.map(p=>[+p[0].toFixed(5),+p[1].toFixed(5)]) };
       S.elev[t.id]=t.elev; if (S.saved[t.id]) S.saved[t.id].elev=t.elev; save();
