@@ -1254,7 +1254,8 @@ let meMarker=null, meWatch=null, cursor=null;
 
 map.on("moveend", ()=>{
   S.view={ c:[+map.getCenter().lat.toFixed(5), +map.getCenter().lng.toFixed(5)], z:map.getZoom() }; save();
-  if (R.tab==="explore" && !R.sel && !R.pv) $("#areaBtn").classList.add("show");
+  if (R.flying){ R.flying=false; return; } // the preview's own camera move doesn't count
+  if (R.tab==="explore" && !R.nav && (!R.sel || document.body.classList.contains("mapfull"))) $("#areaBtn").classList.add("show");
 });
 
 function drawTrails(){
@@ -2177,7 +2178,6 @@ function previewTrail(id, list){
   if (list) R.pvList=list; else if (!R.pvList || !R.pvList.includes(id)) R.pvList=visibleTrails().map(x=>x.id);
   R.pv=id;
   if (matchMedia("(max-width:899px)").matches) mapFull(true);
-  $("#areaBtn").classList.remove("show");
   selLayer.clearLayers();
   L.polyline(t.segs, { color:"#fff", weight:9, opacity:.95, interactive:false }).addTo(selLayer);
   L.polyline(t.segs, { color:css(DCOL[difficulty(t)]), weight:6, interactive:false }).addTo(selLayer);
@@ -2213,6 +2213,7 @@ function pvFrame(t, ph){
   let z=Math.min(13, map.getBoundsZoom(B.pad(0.8), false, L.point(side*2, top+ph)));
   if (map.getBoundsZoom(B, false, L.point(side*2, top+ph))>=map.getZoom()) z=Math.min(z, map.getZoom());
   const c=map.project(B.getCenter(), z).add([0, (ph-top)/2]);
+  R.flying=true; clearTimeout(R.flyT); R.flyT=setTimeout(()=>{ R.flying=false; }, 1200);
   map.flyTo(map.unproject(c, z), z, { duration:.6 }); }
 function pvStep(k){ const i=R.pvList.indexOf(R.pv), j=i+k; if (j>=0 && j<R.pvList.length) previewTrail(R.pvList[j]); }
 function hidePreview(){ R.pv=null; $("#pv").hidden=true; document.body.classList.remove("pving"); }
