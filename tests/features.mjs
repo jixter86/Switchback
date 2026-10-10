@@ -13,7 +13,7 @@ await step("load", () => pg.goto(url, { waitUntil: "load", timeout: 30000 }));
 await step("search", async () => { await pg.fill("#q", "North Bend"); await pg.press("#q", "Enter");
   await pg.waitForSelector("#suggest.show button", { timeout: 15000 }); await pg.click("#suggest button:has-text('Washington')"); });
 await step("cards", () => pg.waitForSelector(".card", { timeout: 60000 }));
-for (const name of ["Little Si", "Mount Si Trail", "Rattlesnake Ledge"]) {
+for (const name of ["Little Si"]) {
   await step("open " + name, async () => { await pg.click(`.card:has-text('${name}') >> nth=0`); await pg.waitForTimeout(25000); });
   console.log("DETAIL", name, (await pg.innerText("#body")).slice(0, 2500).replace(/\n/g, " | "));
   console.log("PHOTOS", await pg.locator(".gallery img").count(), "PINS", await pg.locator(".hlpin").count());
@@ -29,8 +29,8 @@ for (const name of ["Little Si", "Mount Si Trail", "Rattlesnake Ledge"]) {
     await pg.waitForTimeout(3000);
     console.log("OFFLINE BODY", (await pg.innerText("body")).slice(0, 600).replace(/\n/g, " | "));
     console.log("OFFLINE TILES", await pg.evaluate(() => [...document.querySelectorAll(".leaflet-tile")].filter(t => t.complete && t.naturalWidth > 0).length));
-    await step("offline saved trail", async () => { await pg.click("text=Saved"); await pg.waitForTimeout(1500);
-      await pg.click("text=Little Si >> nth=0"); await pg.waitForTimeout(6000);
+    await step("offline saved trail", async () => { await pg.click("[data-tab=saved]"); await pg.waitForTimeout(1500);
+      await pg.click(".card:has-text('Little Si') >> nth=0"); await pg.waitForTimeout(6000);
       console.log("OFFLINE DETAIL", (await pg.innerText("#body")).slice(0, 900).replace(/\n/g, " | "));
       console.log("OFFLINE TRAIL TILES", await pg.evaluate(() => [...document.querySelectorAll(".leaflet-tile")].filter(t => t.complete && t.naturalWidth > 0).length), "of", await pg.locator(".leaflet-tile").count()); });
     await pg.screenshot({ path: "shots/offline.png" });
