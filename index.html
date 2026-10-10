@@ -875,6 +875,24 @@ dialog h2{margin:0 0 4px;font:700 1.4rem var(--display);text-transform:uppercase
 .nav{position:fixed;z-index:30;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 62px);background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:14px;padding:10px 12px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
 .nav[hidden]{display:none}
 body.navving .leaflet-top.leaflet-right{margin-top:96px}
+/* Map / List toggle (full-screen map like AllTrails) */
+.mapbtn{position:fixed;z-index:16;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 18px);border:0;background:var(--ink);color:var(--bg);font-weight:700;padding:11px 18px;border-radius:999px;box-shadow:0 6px 18px rgba(0,0,0,.3);display:inline-flex;align-items:center;gap:7px;font-size:.95rem}
+.mapbtn svg{width:18px;height:18px}
+.panel{transition:height .22s ease,transform .25s ease}
+body.mapfull .panel{transform:translateY(calc(100% + 20px))}
+body.mapfull .leaflet-bottom{bottom:0}
+@media (max-width:899px){ .body{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 76px)} body[data-size=peek]:not(.mapfull) .mapbtn{display:none} }
+@media (min-width:900px){
+  #map{transition:left .25s ease}
+  .mapbtn{left:410px;transform:none;top:calc(50% - 22px);bottom:auto;border-radius:0 999px 999px 0;padding:11px 12px 11px 10px}
+  body.mapfull .panel{transform:translateX(-100%)}
+  body.mapfull #map{left:0}
+  body.mapfull .mapbtn{left:0}
+  body.mapfull .top{width:410px}
+  body.mapfull .areabtn,body.mapfull .toast{left:50%}
+}
+body.navving .mapbtn{display:none}
+
 .navtop{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.85rem;color:var(--muted)}
 .navtop b{color:var(--ink)}
 .navtop .btn{padding:5px 10px;font-size:.82rem}
@@ -908,6 +926,7 @@ body.navving .leaflet-top.leaflet-right{margin-top:96px}
 <button class="areabtn" id="areaBtn">Search trails in this area</button>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div class="nav" id="nav" hidden aria-live="polite"></div>
+<button class="mapbtn" id="mapBtn" type="button" aria-pressed="false"></button>
 
 <aside class="panel" id="panel">
   <button class="handle" id="handle" aria-label="Resize panel"><span></span></button>
@@ -1322,8 +1341,16 @@ navigator.permissions?.query({ name:"geolocation" }).then(st=>{ if (st.state==="
 
 /* ================= panel ================= */
 const sizes=["peek","half","full"];
-$("#handle").onclick=()=>{ const d=document.body.dataset; d.size=sizes[(sizes.indexOf(d.size)+1)%3]; };
-function sheet(size){ if (matchMedia("(max-width:899px)").matches) document.body.dataset.size=size; }
+$("#handle").onclick=()=>{ mapFull(false); const d=document.body.dataset; d.size=sizes[(sizes.indexOf(d.size)+1)%3]; };
+function sheet(size){ mapFull(false); if (matchMedia("(max-width:899px)").matches) document.body.dataset.size=size; }
+var MAP_IC='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>',
+  LIST_IC='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h0M4 12h0M4 18h0"/></svg>';
+function mapFull(on){ const b=document.body, was=b.classList.contains("mapfull"); on=!!on;
+  b.classList.toggle("mapfull", on);
+  const btn=$("#mapBtn"); btn.innerHTML=on?LIST_IC+"List":MAP_IC+"Map"; btn.setAttribute("aria-pressed", on); btn.setAttribute("aria-label", on?"Show list":"Full-screen map");
+  if (was!==on){ const c=map.getCenter(); setTimeout(()=>{ map.invalidateSize({ pan:false }); if (matchMedia("(min-width:900px)").matches) map.panTo(c, { animate:false }); }, 280); } }
+$("#mapBtn").onclick=()=>mapFull(!document.body.classList.contains("mapfull"));
+mapFull(false);
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
 function setTab(t){ R.tab=t; if (t!=="explore") $("#areaBtn").classList.remove("show");
   document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-selected", b.dataset.tab===t)); closeTrail(true); render(); }
