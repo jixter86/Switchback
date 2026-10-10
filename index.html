@@ -767,6 +767,7 @@ button{cursor:pointer}
 .chip.easy{color:var(--easy)}.chip.moderate{color:var(--mod)}.chip.hard{color:var(--hard)}
 .chip.plain{color:var(--muted)}
 .chip.at{color:#fff;background:#3b7d23;border-color:#3b7d23}
+.atcard{cursor:pointer}.atcard .atlink{margin-left:auto;color:#3b7d23;font-weight:600;text-decoration:none}
 .chip.pop{color:#b5410f;border-color:#e8915f;background:#fff1e8;text-transform:none;letter-spacing:0}
 @media (prefers-color-scheme: dark){.chip.pop{color:#ffb38a;background:#3a1f10;border-color:#8a4520}}
 .card.atcard{border-left:4px solid #3b7d23;text-decoration:none;color:var(--ink)}
@@ -1140,7 +1141,7 @@ function trailKind(tagList, name){
   if (any(t=>t.bicycle==="yes") && !any(t=>t.foot||t.sac_scale) && !/trail|loop|path|walk|hike/i.test(name)) return "bike"; // bike-park lines often only say bicycle=yes
   return "hike";
 }
-function buildTrails(json){
+function buildTrails(json, opt){
   const rels=[], ways=[], heads=[], parks=[];
   for (const e of json.elements||[]){
     if (e.type==="relation") rels.push(e);
@@ -1180,7 +1181,7 @@ function buildTrails(json){
       const ids=g.map(w=>w.id).sort((a,b)=>a-b);
       const all=Object.assign({}, ...g.map(w=>w.tags)); // any piece's tags count for the whole trail
       const t=makeTrail("w"+ids[0]+"-"+ids.length, name, segs, all, { t:"w", ids }, false);
-      if (isNoise(name, g.map(w=>w.tags), t.len)) continue;
+      if (isNoise(name, g.map(w=>w.tags), opt?.keepShort ? 1e9 : t.len)) continue;
       t.kind=trailKind(g.map(w=>w.tags), name); t.official=g.some(w=>w.tags.foot==="designated"||w.tags.sac_scale||w.tags.operator);
       out.push(t);
     }
@@ -1391,7 +1392,8 @@ function renderExplore(b){
     const nb=R.trails.filter(x=>x.kind==="bike").length;
     h+=`<p class="count">${v.length} trail${v.length===1?"":"s"} in this area${f.act==="hike"&&nb?` · ${nb} bike trail${nb===1?"":"s"} hidden`:""}</p>`;
     h+= v.length ? v.map(t=>card(t)).join("") : `<div class="empty"><strong>No trails here</strong>OpenStreetMap has no named trails in this view. Try zooming out or another area.</div>`;
-    const ao=atOnly(); if (ao.length) h+=`<div class="lab atlab">More on AllTrails (${ao.length})</div><p class="note" style="margin:0 0 8px">AllTrails routes with no matching trail on the map here. They open in AllTrails.</p>`+ao.map(atCard).join(""); }
+    const ao=atOnly(); if (ao.length) h+=`<div class="lab atlab">More on AllTrails (${ao.length})</div><p class="note" style="margin:0 0 8px">AllTrails routes with no matching trail on the map here. Tap one to find it on the map, then view and save it like any trail.</p>`+ao.map(atCard).join(""); }
+    setTimeout(()=>bindAtCards(b),0);
   b.innerHTML=h;
   $("#fAct").onchange=e=>{ f.act=e.target.value; try { localStorage.setItem(KEY+".act", f.act); } catch(_){} render(); prefetchElev(); };
   $("#fDiff").onchange=e=>{ f.diff=e.target.value; render(); };
@@ -2010,10 +2012,45 @@ function atOnly(){ const f=R.filt, names=new Set(R.trails.map(t=>atNorm(t.name))
 function popChip(x){ return x?.p&&x.p<=10 ? `<span class="chip pop" title="AllTrails popularity rank in this area">&#128293; #${x.p} popular</span>` : ""; }
 function popLine(x){ const a=[]; if (x.p) a.push(`#${x.p} most popular in this area`); if (x.tf) a.push({heavy:"usually busy (heavy traffic)",moderate:"moderate traffic",light:"usually quiet (light traffic)"}[x.tf]); return a.length?`<p style="margin:0 0 8px">&#128293; ${a.join(", ")}.</p>`:""; }
 const RT={ O:"out & back", L:"loop", P:"point to point" };
-function atCard(x){ return `<a class="card atcard" href="${esc(x.u)}" target="_blank" rel="noopener">
+function atCard(x){ return `<div class="card atcard" role="button" tabindex="0" data-at="${x.id}">
     <span class="nm">${esc(x.n)}</span>
     <span class="meta"><span class="chip at">AllTrails</span>${popChip(x)}<span class="chip ${AT_DIFF[x.d]||"plain"}">${esc(x.d)}</span><span>★ ${x.r.toFixed(1)}</span><span>${fmtLen(x.l)} ${RT[x.rt]||""}</span><span>&#8599; ${fmtEl(x.g)}</span></span>
-    <span class="meta"><span>${esc(x.loc)} · opens in AllTrails</span></span></a>`; }
+    <span class="meta"><span>${esc(x.loc)}</span><a href="${esc(x.u)}" target="_blank" rel="noopener" class="atlink" onclick="event.stopPropagation()">AllTrails &#8599;</a></span></div>`; }
+function bindAtCards(root){ root.querySelectorAll(".atcard[data-at]").forEach(c=>{ c.onclick=()=>openAT(+c.dataset.at); c.onkeydown=e=>{ if (e.key==="Enter") openAT(+c.dataset.at); }; }); }
+const AT_STOP=new Set(["trail","trails","loop","the","and","to","via","of","from","lower","upper","east","west","north","south","summit","lookout","trailhead","1","2","3"]);
+const atTok=s=>atNorm(s).split(" ").filter(w=>w&&!AT_STOP.has(w));
+function atRe(words){ return words.map(w=>w==="mt" ? "m(oun)?t" : w.replace(/[^a-z0-9]/g,"").replace(/[aeiou]/g,"[^ ]{1,3}")).join("[^a-z]{1,4}"); }
+function atArea(x){ return (AT?.areas||[]).find(a=>a.trails.includes(x)); }
+async function openAT(id){
+  let x=null; for (const a of (AT?.areas||[])) for (const y of a.trails) if (y.id===id) x=y; if (!x) return;
+  const hit=R.trails.find(t=>atNorm(t.name)===atNorm(x.n)); if (hit) return openTrail(hit.id);
+  if (navigator.onLine===false){ toast("You're offline. Open it in AllTrails when you have signal."); return; }
+  const main=x.n.split(/\s+(?:via|to|from)\s+|:|\(/i)[0], viaPart=(x.n.match(/\s+via\s+(.+)$/i)||[])[1];
+  const keys=[atTok(main).slice(0,2), viaPart?atTok(viaPart).slice(0,2):null].filter(k=>k&&k.length);
+  if (!keys.length) { toast("Couldn't search for that name."); return; }
+  const re=keys.map(atRe).join("|");
+  const bb=atArea(x).bbox.map(v=>(+v).toFixed(4)).join(",");
+  const q=`[out:json][timeout:25];
+(relation["route"~"^(hiking|foot|walking)$"]["name"~"${re}",i](${bb}););
+out geom;
+(way["highway"~"^(path|footway|track|bridleway|steps)$"]["name"~"${re}",i](${bb}););
+out geom;
+node["highway"="trailhead"](${bb});
+out;`;
+  toast("Finding "+x.n+" on the map…");
+  let list=[];
+  try { list=buildTrails(await overpass(q), { keepShort:true }); } catch(e){ toast("The map server is busy. Try again in a moment."); return; }
+  const want=atTok(x.n), atLen=x.l;
+  let best=null, bs=0;
+  for (const t of list){ const tk=atTok(t.name); if (!tk.length) continue;
+    const ov=tk.filter(w=>want.includes(w)).length; if (!ov) continue;
+    const L2=t.loop?t.len:t.len*2, lenFit=1-Math.min(1, Math.abs(L2-atLen)/Math.max(atLen,1));
+    const sc=ov/Math.max(tk.length,1) + ov/want.length + (t.osm?.t==="r"?.3:0) + .5*lenFit;
+    if (sc>bs){ bs=sc; best=t; } }
+  if (!best){ toast("OpenStreetMap has no trail called "+x.n+" here. Use the AllTrails link on its card."); return; }
+  best.name=x.n; best.atId=x.id;
+  if (!R.byId[best.id]){ R.trails.push(best); R.byId[best.id]=best; }
+  openTrail(best.id); }
 function atBox(t){ const x=atFor(t);
   if (x) return `<div class="box atbox"><div class="lab" style="margin-top:0"><span class="chip at">AllTrails</span></div>
     <p style="margin:6px 0"><b>${esc(x.n)}</b>: ★ ${x.r.toFixed(1)}, ${esc(x.d)}, ${fmtLen(x.l)} ${RT[x.rt]||""}, ${fmtEl(x.g)} gain.</p>
