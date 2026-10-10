@@ -14,6 +14,8 @@ jobs:
       - name: Probe APIs directly
         run: |
           for u in "https://overpass-api.de/api/status" "https://geocoding-api.open-meteo.com/v1/search?name=North%20Bend&count=1" "https://api.open-meteo.com/v1/elevation?latitude=47.5&longitude=-121.7" "https://router.project-osrm.org/route/v1/driving/-122.2,47.6;-121.7,47.5?overview=false" "https://a.tile.opentopomap.org/12/659/1430.png"; do echo "$u -> $(curl -s -o /dev/null -w '%{http_code}' -m 20 "$u")"; done
+      - name: Probe Overpass with a real query
+        run: curl -s -m 60 -X POST --data-urlencode 'data=[out:json][timeout:30];(relation["route"~"^(hiking|foot|walking)$"](47.40,-121.90,47.60,-121.60););out tags 3;' https://overpass-api.de/api/interpreter | head -c 600; echo
       - run: mkdir -p shots && node tests/live.mjs
       - uses: actions/upload-artifact@v4
         if: always()

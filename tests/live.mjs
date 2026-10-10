@@ -1,6 +1,6 @@
 // Drives the live site in Chromium (mobile size) and prints what happened.
 import { chromium } from "playwright";
-const url = process.env.SITE || "https://jixter86.github.io/switchback/";
+const url = process.env.SITE || "https://jixter86.github.io/Switchback/";
 const b = await chromium.launch();
 const pg = await b.newPage({ viewport: { width: 390, height: 844 }, geolocation: { latitude: 47.4957, longitude: -121.7868 }, permissions: ["geolocation"] });
 pg.on("console", m => console.log("CONSOLE", m.type(), m.text()));
