@@ -1034,6 +1034,8 @@ function buildTrails(json){
   for (const w of ways){
     const t=w.tags; if (!t.name || inRel.has(w.id)) continue;
     if (t.footway==="sidewalk"||t.footway==="crossing"||t.access==="private"||t.area==="yes") continue;
+    if (t["mtb:scale"]!=null && !/^(yes|designated|permissive)$/.test(t.foot||"") && !t.sac_scale) continue; // bike-park lines
+    if (t.foot==="no") continue;
     if (t.highway==="track" && !t.sac_scale && !/trail|path|loop/i.test(t.name)) continue; // forest roads
     if (t.highway==="footway" && /^(asphalt|concrete|paving_stones|sett|paved)/.test(t.surface||"")) continue; // town footpaths
     if (/^(yes|designated)$/.test(t.motor_vehicle||t.motorcycle||t.atv||"") || /\bOHV\b|\bATV\b/i.test(t.name)) continue; // motorised
@@ -1052,7 +1054,7 @@ function buildTrails(json){
       if (t.len>=300) out.push(t);
     }
   }
-  for (const t of out){ const h=pickHead(t, heads, parks); t.head=h.p; t.headSrc=h.src; }
+  for (const t of out){ const h=pickHead(t, heads, parks); t.head=h.p; t.headSrc=h.src; if (S.elev[t.id]) t.elev=S.elev[t.id]; }
   return out;
 }
 
@@ -1118,7 +1120,17 @@ out center;`;
     const t=buildTrails(await overpass(q));
     R.trails=t; R.byId=Object.fromEntries(t.map(x=>[x.id,x]));
   } catch(e){ R.searchErr=navigator.onLine===false ? "You're offline." : "Couldn't reach the OpenStreetMap trail server. It may be busy, so try again. If the map is blank too, this page is being shown in a preview that blocks the internet: open it in Safari or Chrome instead."; }
-  R.searching=false; render();
+  R.searching=false; render(); prefetchElev();
+}
+let prefetchRun=0;
+async function prefetchElev(){ // fill in climb for the nearest trails, one request at a time, so cards show real difficulty
+  const run=++prefetchRun;
+  for (const t of visibleTrails().slice(0,30)){
+    if (run!==prefetchRun) return;
+    if (t.elev || t.elevErr) continue;
+    try { await computeElev(t); } catch(e){ t.elevErr=true; continue; }
+    if (run===prefetchRun && R.tab==="explore" && !R.sel){ const y=$("#body").scrollTop; render(); $("#body").scrollTop=y; }
+  }
 }
 function visibleTrails(){
   const f=R.filt; let t=R.trails.slice();
@@ -1201,7 +1213,7 @@ function renderExplore(b){
   b.innerHTML=h;
   $("#fDiff").onchange=e=>{ f.diff=e.target.value; render(); };
   $("#fLen").onchange=e=>{ f.len=e.target.value; render(); };
-  $("#fSort").onchange=e=>{ f.sort=e.target.value; render(); };
+  $("#fSort").onchange=e=>{ f.sort=e.target.value; render(); prefetchElev(); };
   $("#retry")&&($("#retry").onclick=searchArea);
   $("#nearMe")&&($("#nearMe").onclick=()=>{ if (!navigator.geolocation) return toast("This browser can't share your location.");
     navigator.geolocation.getCurrentPosition(p=>{ flyTo([p.coords.latitude,p.coords.longitude]); }, ()=>toast("Location permission was denied.")); });
@@ -1230,10 +1242,8 @@ async function openTrail(id){
   loadExtras(t);
 }
 function closeTrail(silent){ R.sel=null; selLayer.clearLayers(); if (cursor){ map.removeLayer(cursor); cursor=null; } if (!silent) render(); }
-async function loadExtras(t){
-  const jobs=[];
-  if (!t.segs) t.elevErr=true;
-  if (!t.elev && t.segs) jobs.push((async()=>{ try {
+/* Elevation along the trail from the trailhead: ~60 m samples, smoothed, with a 4 m hysteresis for gain/loss. */
+async function computeElev(t){
       const path=orderPath(t.segs, t.head); const cum=[0];
       for (let i=1;i<path.length;i++){ const d=hav(path[i-1],path[i]); cum.push(cum[i-1]+(d>200?0:d)); } // ignore jumps between disconnected pieces
       const total=cum[cum.length-1]||1, N=Math.min(100, Math.max(5, Math.round(total/60)+1)), samp=[], at=[];
@@ -1244,8 +1254,12 @@ async function loadExtras(t){
       const el=raw.map((_,i)=>{ let a=0,n=0; for (let k=i-2;k<=i+2;k++) if (raw[k]!=null){ a+=raw[k]; n++; } return a/n; }); // the DEM is ~90 m, so smooth its steps
       let gain=0, loss=0, ref=el[0]; for (const v of el){ if (v-ref>=4){ gain+=v-ref; ref=v; } else if (ref-v>=4){ loss+=ref-v; ref=v; } }
       t.elev={ gain, loss, max:Math.max(...el), min:Math.min(...el), prof:el.map((e,i)=>[Math.round(at[i]), Math.round(e)]), pts:samp.map(p=>[+p[0].toFixed(5),+p[1].toFixed(5)]) };
-      S.elev[t.id]=t.elev; if (S.saved[t.id]) S.saved[t.id].elev=t.elev; save();
-    } catch(e){ t.elevErr=true; } })());
+      S.elev[t.id]=t.elev; const ks=Object.keys(S.elev); if (ks.length>300) ks.slice(0,ks.length-300).forEach(k=>{ if (!S.saved[k]) delete S.elev[k]; }); if (S.saved[t.id]) S.saved[t.id].elev=t.elev; save();
+}
+async function loadExtras(t){
+  const jobs=[];
+  if (!t.segs) t.elevErr=true;
+  if (!t.elev && t.segs) jobs.push(computeElev(t).catch(()=>{ t.elevErr=true; }));
   const hk=t.head.join(",");
   if (!R.wx[hk]) jobs.push((async()=>{ try { R.wx[hk]=await getWeather(t.head); } catch(e){ R.wx[hk]="err"; } })());
   const dk=S.home ? S.home.lat+","+S.home.lng+">"+hk : null;
