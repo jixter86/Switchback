@@ -818,7 +818,7 @@ textarea.txt{min-height:70px;resize:vertical}
 .wxgrid{overflow-x:auto;margin:0 -4px 6px;padding:0 4px}
 .wxgrid table{border-collapse:separate;border-spacing:2px;font-size:.78rem}
 .wxgrid th{font-weight:600;color:var(--muted);text-align:center;white-space:nowrap}
-.wxgrid tbody th{position:sticky;left:0;z-index:1;background:var(--panel);text-align:left;max-width:84px;min-width:84px;padding-right:3px}
+.wxgrid tbody th{position:sticky;left:0;z-index:1;background:var(--panel);text-align:left;max-width:96px;min-width:84px;padding-right:3px}
 .wxnm{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;max-width:84px;overflow:hidden;font-size:.74rem;line-height:1.15;font-weight:700;margin:0}
 .wxgrid tbody th small{display:block;font-weight:400;color:var(--muted);font-size:.7rem}
 .dayh{background:none;border:1px solid transparent;border-radius:8px;padding:2px 4px;font:inherit;font-weight:700;color:var(--ink);display:flex;flex-direction:column;align-items:center;min-width:34px}
@@ -835,6 +835,11 @@ textarea.txt{min-height:70px;resize:vertical}
 .pvslot{margin:10px 0 4px}
 .pvmap{height:190px;border-radius:12px;overflow:hidden;border:1px solid var(--line);cursor:pointer}
 .hlpin.sm{font-size:11px;line-height:18px}
+.wxmeta{display:flex;align-items:center;gap:4px;font-weight:400;font-size:.7rem;color:var(--muted);white-space:nowrap;margin-top:2px}
+.dpill{font-weight:700;font-size:.62rem;text-transform:uppercase;letter-spacing:.04em;padding:0 5px;border-radius:999px;border:1px solid currentColor;line-height:1.4}
+.dpill.easy{color:var(--easy)}.dpill.moderate{color:var(--mod)}.dpill.hard{color:var(--hard)}
+.wxleg .aticon{vertical-align:-2px}
+.aticon{width:14px;height:14px;flex:0 0 14px}
 .wxbest{margin:0 0 6px;font-size:.9rem}
 .days{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:8px}
 .day{flex:0 0 auto;min-width:52px;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:6px 4px;display:flex;flex-direction:column;align-items:center;gap:1px;font-size:.78rem;color:var(--ink)}
@@ -1858,6 +1863,13 @@ function dayScore(x, date){ const day=dayOf(x,date).filter(i=>{ const h=+x.t[i].
 const scoreWord=s=>s>=80?"Great":s>=60?"Good":s>=40?"Fair":"Poor";
 const scoreCls=s=>s>=80?"s-great":s>=60?"s-good":s>=40?"s-fair":"s-poor";
 const hr12=h=>(h%12||12)+(h<12?" AM":" PM");
+const AT_ICON='<svg class="aticon" viewBox="0 0 16 16" aria-label="From AllTrails"><title>From AllTrails</title><rect width="16" height="16" rx="4" fill="#3b7d23"/><path d="M2.5 12.5 6.5 5l2.2 4 1.3-2 3.5 5.5z" fill="#fff"/></svg>';
+/* Difficulty, distance and climb for the weather table: AllTrails' numbers when the trail matches one, else Switchback's own. */
+function trailMeta(t){ const a=atFor(t);
+  const d=a ? (AT_DIFF[a.d]||difficulty(t)) : difficulty(t), len=a ? a.l : (t.loop?t.len:t.len*2);
+  const up=a ? a.g : (t.elev ? t.elev.gain+(t.loop?0:t.elev.loss) : null);
+  const ft=up==null ? "" : imp() ? `↗${Math.round(up*3.28084).toLocaleString()}'` : `↗${Math.round(up)}m`;
+  return `<span class="wxmeta"><span class="dpill ${d}">${{ easy:"Easy", moderate:"Mod", hard:"Hard" }[d]||d}</span>${a?AT_ICON:""}</span><span class="wxmeta">${fmtLen(len)}${ft?" · "+ft:""}</span>`; }
 function weatherBoard(){
   const ts=Object.values(S.saved).filter(t=>t.head);
   if (!ts.length) return "";
@@ -1885,10 +1897,11 @@ function weatherBoard(){
   const today=R.wxDay===new Date().toLocaleDateString("en-CA");
   o+=`<div class="wxgrid"><table class="hours"><thead><tr><th></th>${hours.map(h=>`<th>${hr12(h).replace(" ","").toLowerCase()}</th>`).join("")}</tr></thead><tbody>`+
     rows.map(t=>{ const x=t.hwx, d=sc[t.id][R.wxDay];
-      return `<tr><th>${nm(t, t===top&&withWx.length>1)}<small>${d?`${d.hi}°/${d.lo}° · ${d.pp}% rain`:""}</small></th>${hours.map(h=>{ const i=x.t.indexOf(`${R.wxDay}T${String(h).padStart(2,"0")}:00`);
+      return `<tr><th>${nm(t, t===top&&withWx.length>1)}${trailMeta(t)}</th>${hours.map(h=>{ const i=x.t.indexOf(`${R.wxDay}T${String(h).padStart(2,"0")}:00`);
         if (i<0) return "<td></td>"; const s=hourScore(x,i), past=today&&h<now.getHours();
         return `<td class="hc ${scoreCls(s)}${past?" past":""}"><span>${(WX[x.c[i]]||["·"])[0]}</span><b>${x.tp[i]}°</b><small>${x.pp[i]??0}%</small></td>`; }).join("")}</tr>`; }).join("")+`</tbody></table></div>`;
   const upd=Math.min(...withWx.map(t=>t.hwx.at));
+  o+=`<p class="note wxleg">Under each trail: difficulty, round-trip distance and climb. ${AT_ICON} means those numbers are AllTrails'.</p>`;
   o+=`<p class="note">Ratings 0 to 100 favor dry, mild (${imp()?"50–75°F":"10–24°C"}), calm daylight hours. Forecast from Open-Meteo, updated ${new Date(upd).toLocaleTimeString([], { hour:"numeric", minute:"2-digit" })}.</p>`;
   return o;
 }
