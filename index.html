@@ -831,6 +831,7 @@ textarea.txt{min-height:70px;resize:vertical}
 .hours td.hc{min-width:38px;text-align:center;border-radius:7px;padding:3px 0;background:color-mix(in srgb,var(--wc) 22%,var(--panel));line-height:1.15}
 .hours td.hc span{display:block;font-size:.8rem}.hours td.hc b{display:block}.hours td.hc small{display:block;color:var(--muted);font-size:.68rem}
 .hours td.past{opacity:.4}
+.wxstar{color:#2e8540;font-size:.8rem;margin-right:2px;float:left}
 .wxbest{margin:0 0 6px;font-size:.9rem}
 .days{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:8px}
 .day{flex:0 0 auto;min-width:52px;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:6px 4px;display:flex;flex-direction:column;align-items:center;gap:1px;font-size:.78rem;color:var(--ink)}
@@ -1840,23 +1841,23 @@ function weatherBoard(){
   if (R.hwxErr) o+=`<p class="note">${esc(R.hwxErr)}</p>`;
   const dayLabel=(d,i)=>i===0?"Today":new Date(d+"T12:00").toLocaleDateString(undefined,{ weekday:"short" });
   const sc={}; withWx.forEach(t=>{ sc[t.id]={}; dates.forEach(d=>sc[t.id][d]=dayScore(t.hwx,d)); });
-  const rows=withWx.slice().sort((a,b)=>(sc[b.id][R.wxDay]?.score??-1)-(sc[a.id][R.wxDay]?.score??-1));
+  const rows=withWx.slice().sort((a,b)=>a.name.localeCompare(b.name)); // fixed order so a trail's row never moves when the day changes
   const bestOf=d=>Math.max(...withWx.map(t=>sc[t.id][d]?.score??-1));
-  const nm=t=>`<button class="linkish wxnm" data-open="${esc(t.id)}" title="${esc(t.name)}">${esc(t.name)}</button>`;
+  const nm=(t,star)=>`${star?'<span class="wxstar" title="Best this day">★</span>':""}<button class="linkish wxnm" data-open="${esc(t.id)}" title="${esc(t.name)}">${esc(t.name)}</button>`;
   // 1. every trail x every day: the overall rating, best per day outlined
-  o+=`<p class="note" style="margin:0 0 6px">Each day's rating for every saved trail. Tap a day for its hours.</p><div class="wxgrid"><table><thead><tr><th></th>${dates.map((d,i)=>`<th><button class="dayh${d===R.wxDay?" on":""}" data-day="${d}">${dayLabel(d,i)}<small>${+d.slice(8)}</small></button></th>`).join("")}</tr></thead><tbody>`+
+  o+=`<p class="note" style="margin:0 0 6px">Each square is that trail's rating from that day's weather; ★ marks the best trail each day. Tap a day for its hours.</p><div class="wxgrid"><table><thead><tr><th></th>${dates.map((d,i)=>`<th><button class="dayh${d===R.wxDay?" on":""}" data-day="${d}">${dayLabel(d,i)}<small>${+d.slice(8)}</small></button></th>`).join("")}</tr></thead><tbody>`+
     rows.map(t=>`<tr><th>${nm(t)}</th>${dates.map(d=>{ const x=sc[t.id][d]; if (!x) return "<td></td>";
       const best=x.score===bestOf(d)&&withWx.length>1, mid=t.hwx.t.indexOf(d+"T13:00");
-      return `<td><button class="wxc ${scoreCls(x.score)}${best?" best":""}${d===R.wxDay?" on":""}" data-day="${d}" title="${scoreWord(x.score)}"><span>${mid>=0?(WX[t.hwx.c[mid]]||["·"])[0]:""}</span><b>${x.score}</b></button></td>`; }).join("")}</tr>`).join("")+`</tbody></table></div>`;
+      return `<td><button class="wxc ${scoreCls(x.score)}${best?" best":""}${d===R.wxDay?" on":""}" data-day="${d}" title="${scoreWord(x.score)}"><span>${mid>=0?(WX[t.hwx.c[mid]]||["·"])[0]:""}</span><b>${best?"★":""}${x.score}</b></button></td>`; }).join("")}</tr>`).join("")+`</tbody></table></div>`;
   // 2. the chosen day, hour by hour, all trails in one grid
-  const di=dates.indexOf(R.wxDay), top=rows[0], tb=sc[top.id][R.wxDay];
+  const top=rows.reduce((a,b)=>(sc[b.id][R.wxDay]?.score??-1)>(sc[a.id][R.wxDay]?.score??-1)?b:a), tb=sc[top.id][R.wxDay];
   o+=`<div class="lab">${new Date(R.wxDay+"T12:00").toLocaleDateString(undefined,{ weekday:"long", month:"short", day:"numeric" })}</div>`;
   if (tb && withWx.length>1) o+=`<p class="wxbest">Best: <b>${esc(top.name)}</b>, ${scoreWord(tb.score).toLowerCase()} (${tb.score}), best ${hr12(tb.from)}–${hr12(tb.from+3)}</p>`;
   const hours=[]; for (let h=6;h<=20;h++) hours.push(h);
   const today=R.wxDay===new Date().toLocaleDateString("en-CA");
   o+=`<div class="wxgrid"><table class="hours"><thead><tr><th></th>${hours.map(h=>`<th>${hr12(h).replace(" ","").toLowerCase()}</th>`).join("")}</tr></thead><tbody>`+
     rows.map(t=>{ const x=t.hwx, d=sc[t.id][R.wxDay];
-      return `<tr><th>${nm(t)}<small>${d?`${d.hi}°/${d.lo}° · ${d.pp}% rain`:""}</small></th>${hours.map(h=>{ const i=x.t.indexOf(`${R.wxDay}T${String(h).padStart(2,"0")}:00`);
+      return `<tr><th>${nm(t, t===top&&withWx.length>1)}<small>${d?`${d.hi}°/${d.lo}° · ${d.pp}% rain`:""}</small></th>${hours.map(h=>{ const i=x.t.indexOf(`${R.wxDay}T${String(h).padStart(2,"0")}:00`);
         if (i<0) return "<td></td>"; const s=hourScore(x,i), past=today&&h<now.getHours();
         return `<td class="hc ${scoreCls(s)}${past?" past":""}"><span>${(WX[x.c[i]]||["·"])[0]}</span><b>${x.tp[i]}°</b><small>${x.pp[i]??0}%</small></td>`; }).join("")}</tr>`; }).join("")+`</tbody></table></div>`;
   const upd=Math.min(...withWx.map(t=>t.hwx.at));
