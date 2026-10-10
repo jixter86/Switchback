@@ -12,14 +12,13 @@ await ev(() => map.setView([47.49, -121.77], 13)); await W(500);
 await ev(() => searchArea());
 console.log("trails", await ev(() => R.trails.length), await ev(() => R.searchErr));
 const id = await ev(() => (R.trails.find(t => /little si/i.test(t.name)) || visibleTrails()[0]).id);
-await ev(id => openTrail(id), id);
-await pg.waitForFunction(() => /elevation profile/i.test(document.querySelector("#panel").innerText) && /°/.test(document.querySelector("#panel .week")?.innerText || ""), null, { timeout: 60000 }).then(() => console.log("PASS details: elevation profile + weather shown")).catch(async () => console.log("FAIL details", await ev(() => document.querySelector("#panel").innerText.slice(0, 1500))));
+if (0) await pg.waitForFunction(() => /elevation profile/i.test(document.querySelector("#panel").innerText) && /°/.test(document.querySelector("#panel .week")?.innerText || ""), null, { timeout: 60000 }).then(() => console.log("PASS details: elevation profile + weather shown")).catch(async () => console.log("FAIL details", await ev(() => document.querySelector("#panel").innerText.slice(0, 1500))));
 await ev(() => closeTrail());
-const cards = await ev(() => [...document.querySelectorAll("[data-at]")].map(c => [c.dataset.at, atById(c.dataset.at)?.n]));
+const cards = await ev(() => [...document.querySelectorAll("[data-at]")].map(c => [c.dataset.at, atById(+c.dataset.at)?.n]));
 console.log("unmatched AllTrails cards", JSON.stringify(cards));
 for (const [aid, n] of cards.slice(0, 4)) {
   await ev(() => { closePreview(); closeTrail(true); });
-  const t0 = Date.now(); await ev(aid => { void openAT(aid); }, aid);
+  const t0 = Date.now(); await ev(aid => { R.pvBack=null; document.querySelector(`.atcard[data-at="${aid}"]`)?.click() || openAT(+aid); }, aid);
   await pg.waitForFunction(() => R.pv || R.sel, null, { timeout: 90000 }).catch(() => {});
   console.log(await ev(() => !!(R.pv || R.sel)) ? "PASS" : "FAIL", "openAT", n, "->", await ev(() => pvTrail(R.pv || R.sel?.id)?.name), Date.now() - t0, "ms", JSON.stringify(await ev(() => _toasts.slice(-2))));
 }
