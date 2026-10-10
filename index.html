@@ -951,12 +951,19 @@ const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).
 function estHours(t){ const km=(t.loop?t.len:t.len*2)/1000, up=(t.elev? t.elev.gain+(t.loop?0:t.elev.loss) : 0); return km/4.2 + up/550; }
 
 /* ================= network ================= */
-const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
-async function overpass(q){
+// Public Overpass servers that send CORS headers. The main one is often busy (504/429), so retry, then fall back.
+const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+async function overpass(q, onRetry){
   let last;
-  for (const u of OVERPASS){
-    try { const r=await fetch(u, { method:"POST", body:"data="+encodeURIComponent(q), headers:{ "Content-Type":"application/x-www-form-urlencoded" } });
-      if (r.ok) return await r.json(); last=new Error("Overpass "+r.status); }
+  const order=[OVERPASS[0], OVERPASS[1], OVERPASS[0], OVERPASS[2], OVERPASS[1]];
+  for (let i=0;i<order.length;i++){
+    if (i){ onRetry?.(i); await sleep(i===2?3000:800); }
+    try { const ctl=new AbortController(), tm=setTimeout(()=>ctl.abort(), 35000);
+      const r=await fetch(order[i], { method:"POST", body:"data="+encodeURIComponent(q), headers:{ "Content-Type":"application/x-www-form-urlencoded" }, signal:ctl.signal });
+      clearTimeout(tm);
+      if (r.ok){ const j=await r.json(); if (j.remark && /runtime error|timed out/i.test(j.remark) && !(j.elements||[]).length) throw new Error(j.remark); return j; }
+      last=new Error("Overpass "+r.status); }
     catch(e){ last=e; }
   }
   throw last;
@@ -1102,11 +1109,11 @@ async function searchArea(){
   $("#areaBtn").classList.remove("show");
   const b=map.getBounds(); const c=b.getCenter();
   let s=b.getSouth(), w=b.getWest(), n=b.getNorth(), e=b.getEast();
-  const maxH=0.35, maxW=0.45; // keep queries polite for Overpass
+  const maxH=0.22, maxW=0.3; // keep queries small so busy Overpass servers answer
   if (n-s>maxH){ s=c.lat-maxH/2; n=c.lat+maxH/2; } if (e-w>maxW){ w=c.lng-maxW/2; e=c.lng+maxW/2; }
   const bb=[s,w,n,e].map(x=>x.toFixed(5)).join(",");
-  const gb=[s-(n-s)/2, w-(e-w)/2, n+(n-s)/2, e+(e-w)/2].map(x=>x.toFixed(5)).join(",");
-  const q=`[out:json][timeout:30];
+  const gb=[s-(n-s)/4, w-(e-w)/4, n+(n-s)/4, e+(e-w)/4].map(x=>x.toFixed(5)).join(",");
+  const q=`[out:json][timeout:25];
 (relation["route"~"^(hiking|foot|walking)$"](${bb}););
 out geom(${gb});
 (way["highway"~"^(path|footway|track|bridleway)$"]["name"](${bb}););
@@ -1117,9 +1124,9 @@ nwr["amenity"="parking"](${bb});
 out center;`;
   R.center=[c.lat,c.lng]; R.searching=true; R.searchErr=null; R.trails=[]; R.byId={}; render();
   try {
-    const t=buildTrails(await overpass(q));
+    const t=buildTrails(await overpass(q, ()=>{ const c=$(".count"); if (c) c.innerHTML='<span class="spin"></span> The trail server is busy, trying again…'; }));
     R.trails=t; R.byId=Object.fromEntries(t.map(x=>[x.id,x]));
-  } catch(e){ R.searchErr=navigator.onLine===false ? "You're offline." : "Couldn't reach the OpenStreetMap trail server. It may be busy, so try again. If the map is blank too, this page is being shown in a preview that blocks the internet: open it in Safari or Chrome instead."; }
+  } catch(e){ R.searchErr=navigator.onLine===false ? "You're offline." : "The OpenStreetMap trail servers are overloaded right now. Wait a few seconds and tap Try again."; }
   R.searching=false; render(); prefetchElev();
 }
 let prefetchRun=0;
