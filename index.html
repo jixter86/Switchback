@@ -2141,8 +2141,7 @@ function previewTrail(id, list){
   L.marker(t.head, { icon:L.divIcon({ className:"headpin", iconSize:[22,22], iconAnchor:[11,22] }), interactive:false }).addTo(selLayer);
   const box=$("#pv"); box.hidden=false; document.body.classList.add("pving");
   drawPreview(t);
-  const bb=t.bbox, ph=box.offsetHeight+30;
-  setTimeout(()=>map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]], { paddingTopLeft:[30,90], paddingBottomRight:[30,ph], maxZoom:15 }), matchMedia("(max-width:899px)").matches?280:0);
+  setTimeout(()=>pvFrame(t, box.offsetHeight+30), matchMedia("(max-width:899px)").matches?280:0);
   if (!t.elev && !S.elev[t.id]) computeElev(t, 60).then(()=>{ if (R.pv===t.id) drawPreview(t); }).catch(()=>{});
   thumbPhoto(t).then(u=>{ if (u && R.pv===t.id){ const im=$("#pv .pvphoto"); if (im){ im.style.backgroundImage=`url("${u}")`; im.classList.add("on"); } } });
 }
@@ -2165,6 +2164,13 @@ function drawPreview(t){
   box.querySelector(".pvprev").onclick=()=>pvStep(-1); box.querySelector(".pvnext").onclick=()=>pvStep(1);
   document.body.style.setProperty("--pvh", box.offsetHeight+"px");
 }
+// Frame a previewed trail with plenty of surroundings: zoomed out (max z13), never zooming in while browsing if it already fits.
+function pvFrame(t, ph){
+  const bb=t.bbox, B=L.latLngBounds([[bb[0],bb[1]],[bb[2],bb[3]]]), top=90, side=30;
+  let z=Math.min(13, map.getBoundsZoom(B.pad(0.8), false, L.point(side*2, top+ph)));
+  if (map.getBoundsZoom(B, false, L.point(side*2, top+ph))>=map.getZoom()) z=Math.min(z, map.getZoom());
+  const c=map.project(B.getCenter(), z).add([0, (ph-top)/2]);
+  map.flyTo(map.unproject(c, z), z, { duration:.6 }); }
 function pvStep(k){ const i=R.pvList.indexOf(R.pv), j=i+k; if (j>=0 && j<R.pvList.length) previewTrail(R.pvList[j]); }
 function hidePreview(){ R.pv=null; $("#pv").hidden=true; document.body.classList.remove("pving"); }
 function closePreview(){ if (!R.pv) return; hidePreview(); if (!R.sel) selLayer.clearLayers(); }
