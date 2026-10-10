@@ -801,6 +801,14 @@ textarea.txt{min-height:70px;resize:vertical}
 .tags dt{color:var(--muted)}.tags dd{margin:0;word-break:break-word}
 .tags a{color:var(--brand)}
 .lists label{display:flex;align-items:center;gap:8px;padding:5px 0}
+.hl{display:flex;flex-wrap:wrap;gap:6px}
+.hlchip{background:var(--panel2);border-radius:999px;padding:4px 10px;font-size:.85rem;font-weight:600}
+.hllist{margin:8px 0 0;padding-left:0;list-style:none;font-size:.9rem;display:grid;gap:3px}
+.hlpin{font-size:18px;line-height:24px;text-align:center;background:var(--panel);border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+.gallery{display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px}
+.gallery a{flex:0 0 auto;width:200px;scroll-snap-align:start;text-decoration:none;color:var(--muted);font-size:.7rem}
+.gallery img{width:200px;height:140px;object-fit:cover;border-radius:10px;display:block;background:var(--panel2)}
+.gallery span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
 
 /* saved + record */
 .listhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:14px 0 6px}
@@ -859,6 +867,9 @@ dialog h2{margin:0 0 4px;font:700 1.4rem var(--display);text-transform:uppercase
     <button class="btn" type="button" id="homeGps">Use my location</button>
   </form>
   <p class="note" id="homeNote"></p>
+  <div class="lab">Offline maps</div>
+  <p class="note" id="offNote">Open a saved trail and tap Download for offline.</p>
+  <button class="btn" id="offClear" type="button">Delete offline maps</button>
   <div class="lab">Data</div>
   <p class="note">Saved trails, lists and recordings live only in this browser. Use share codes on the Saved tab to move them to another device.</p>
   <div class="row" style="justify-content:space-between;margin-top:14px">
@@ -892,7 +903,7 @@ function load(){
 function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){ toast("Storage is full or blocked; changes may not stick."); } }
 
 const R = { tab:"explore", trails:[], byId:{}, sel:null, filt:{ act:"hike", diff:"", len:"", sort:"best" }, center:null,
-  searching:false, searchErr:null, wx:{}, drive:{}, rec:null, layers:{} };
+  searching:false, searchErr:null, wx:{}, drive:{}, rec:null, layers:{}, hl:{}, media:{}, base:"Topo" };
 if (/^(hike|bike|all)$/.test(savedAct||"")) R.filt.act=savedAct;
 
 const $ = s => document.querySelector(s);
@@ -1004,7 +1015,7 @@ async function getDrive(p){
 }
 
 /* ================= trail building ================= */
-const KEEP_TAGS = ["name","sac_scale","surface","trail_visibility","operator","website","url","description","dog","bicycle","horse","network","ref","distance","incline","access","from","to","symbol","wikipedia"];
+const KEEP_TAGS = ["name","sac_scale","surface","trail_visibility","operator","website","url","description","dog","bicycle","horse","network","ref","distance","incline","access","from","to","symbol","wikipedia","wikidata"];
 function pickTags(t){ const o={}; KEEP_TAGS.forEach(k=>{ if (t?.[k]) o[k]=t[k]; }); return o; }
 function makeTrail(id, name, segs, tags, osm, partial){
   const len=segs.reduce((a,s)=>a+segLen(s),0);
@@ -1101,8 +1112,9 @@ const base={
 };
 const over={ "Marked hiking routes": L.tileLayer("https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png", { maxZoom:18, opacity:.8, attribution:'&copy; <a href="https://hiking.waymarkedtrails.org">Waymarked Trails</a>' }) };
 base.Topo.addTo(map);
+map.on("baselayerchange", e=>{ R.base=e.name; });
 let tileFails=0;
-base.Topo.on("tileerror", ()=>{ if (++tileFails===6 && map.hasLayer(base.Topo)){ map.removeLayer(base.Topo); base["Esri Topo"].addTo(map); toast("Switched to the Esri topo map because OpenTopoMap tiles weren't loading."); } });
+base.Topo.on("tileerror", ()=>{ if (++tileFails===6 && map.hasLayer(base.Topo)){ map.removeLayer(base.Topo); base["Esri Topo"].addTo(map); R.base="Esri Topo"; toast("Switched to the Esri topo map because OpenTopoMap tiles weren't loading."); } });
 L.control.zoom({ position:"topright" }).addTo(map);
 L.control.layers(base, over, { position:"topright" }).addTo(map);
 L.control.scale({ imperial:true, metric:true, position:"bottomright" }).addTo(map);
@@ -1225,7 +1237,7 @@ function card(t, extra){
   const dist=R.center && R.tab==="explore" ? fd(R.center,t.head) : null;
   return `<button class="card" data-id="${esc(t.id)}">
     <span class="nm">${esc(t.name)}${saved?" <span title='Saved' style='color:var(--accent)'>&#9829;</span>":""}</span>
-    <span class="meta"><span class="chip ${d}">${d}</span>${t.kind==="bike"?'<span class="chip plain">Bike trail</span>':t.kind==="shared"?'<span class="chip plain">Hike + bike</span>':""}<span>${fmtLen(t.loop?t.len:t.len*2)} ${t.loop?"loop":"round trip"}</span>${t.elev?`<span>&#8599; ${fmtEl(t.elev.gain+(t.loop?0:t.elev.loss))}</span>`:""}${dist!=null?`<span>${fmtLen(dist)} away</span>`:""}${extra||""}</span>
+    <span class="meta"><span class="chip ${d}">${d}</span>${t.kind==="bike"?'<span class="chip plain">Bike trail</span>':t.kind==="shared"?'<span class="chip plain">Hike + bike</span>':""}${S.saved[t.id]?.offline?'<span class="chip plain">Offline</span>':""}<span>${fmtLen(t.loop?t.len:t.len*2)} ${t.loop?"loop":"round trip"}</span>${t.elev?`<span>&#8599; ${fmtEl(t.elev.gain+(t.loop?0:t.elev.loss))}</span>`:""}${dist!=null?`<span>${fmtLen(dist)} away</span>`:""}${extra||""}</span>
   </button>`;
 }
 function bindCards(root){ root.querySelectorAll(".card").forEach(c=>{ c.onclick=()=>openTrail(c.dataset.id);
@@ -1270,12 +1282,14 @@ async function openTrail(id){
     catch(e){ toast("Couldn't load that trail's map line right now."); }
   }
   if (S.elev[id] && !t.elev) t.elev=S.elev[id];
+  if (S.saved[id]?.hl && R.hl[id]==null) R.hl[id]=S.saved[id].hl;
   R.sel=t; sheet("full"); render();
   if (t.segs){ selLayer.clearLayers();
     L.polyline(t.segs, { color:"#fff", weight:9, opacity:.9 }).addTo(selLayer);
     L.polyline(t.segs, { color:css(DCOL[difficulty(t)]), weight:5 }).addTo(selLayer);
     const bb=t.bbox; map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]], { padding:[30,30], maxZoom:16 }); }
   L.marker(t.head, { icon:L.divIcon({ className:"headpin", iconSize:[22,22], iconAnchor:[11,22] }), title:"Trailhead" }).addTo(selLayer);
+  drawHighlights(t);
   $("#areaBtn").classList.remove("show");
   loadExtras(t);
 }
@@ -1299,7 +1313,11 @@ async function loadExtras(t){
   if (!t.segs) t.elevErr=true;
   if (!t.elev && t.segs) jobs.push(computeElev(t).catch(()=>{ t.elevErr=true; }));
   const hk=t.head.join(",");
-  if (!R.wx[hk]) jobs.push((async()=>{ try { R.wx[hk]=await getWeather(t.head); } catch(e){ R.wx[hk]="err"; } })());
+  if (!R.wx[hk]) jobs.push((async()=>{ try { R.wx[hk]=await getWeather(t.head); if (S.saved[t.id]){ S.saved[t.id].wx={ at:Date.now(), data:R.wx[hk] }; save(); } }
+    catch(e){ const c=S.saved[t.id]?.wx; R.wx[hk]=c ? c.data : "err"; if (c) R.wxOld=c.at; } })());
+  if (t.segs && R.hl[t.id]==null) jobs.push(loadHighlights(t).then(x=>{ R.hl[t.id]=x; if (S.saved[t.id]){ S.saved[t.id].hl=x; save(); } drawHighlights(t); }).catch(()=>{ R.hl[t.id]=S.saved[t.id]?.hl||[]; }));
+  if (t.segs && R.media[t.id]==null) jobs.push(loadMedia(t).then(x=>{ R.media[t.id]=x; }).catch(()=>{ R.media[t.id]="err"; }));
+  if (!t.segs){ if (R.hl[t.id]==null) R.hl[t.id]=S.saved[t.id]?.hl||[]; if (R.media[t.id]==null) R.media[t.id]="err"; }
   const dk=S.home ? S.home.lat+","+S.home.lng+">"+hk : null;
   if (dk && !R.drive[dk]) jobs.push((async()=>{ try { R.drive[dk]=await getDrive(t.head); } catch(e){ R.drive[dk]="err"; } })());
   await Promise.all(jobs.map(j=>j.then(()=>{ if (R.sel===t) render(); })));
@@ -1319,6 +1337,7 @@ function renderDetail(b){
     <div class="stat"><div class="v">${t.elev||t.elevErr?fmtDur(estHours(t)):'<span class="spin"></span>'}</div><div class="k">Est. time</div></div>
   </div>`;
   if (!t.loop) h+=`<p class="note" style="margin:-4px 0 6px">One way: ${fmtLen(t.len)}${t.elev?`, ${fmtEl(t.elev.gain)} up and ${fmtEl(t.elev.loss)} down from the trailhead`:""}.</p>`;
+  h+=highlightsHtml(t)+mediaHtml(t);
   if (t.elev) h+=`<div class="lab">Elevation profile</div>${profileSvg(t)}<p class="note">High point ${fmtEl(t.elev.max)}, low point ${fmtEl(t.elev.min)}. Drag across the chart to follow it on the map.</p>`;
   else if (t.elevErr) h+=`<p class="note">Elevation data is unavailable right now.</p>`;
 
@@ -1360,6 +1379,8 @@ function renderDetail(b){
   if (osmUrl) rows.push(["Source", `<a href="${osmUrl}" target="_blank" rel="noopener">OpenStreetMap</a> (edit it there if something's wrong)`, true]);
   if (rows.length) h+=`<div class="box"><div class="lab" style="margin-top:0">Details</div><dl class="tags">${rows.map(r=>`<dt>${r[0]}</dt><dd>${r[2]?r[1]:esc(r[1])}</dd>`).join("")}</dl></div>`;
 
+  const off=S.saved[t.id]?.offline;
+  h+=`<div class="box"><div class="lab" style="margin-top:0">Offline</div>${S.saved[t.id]?(off?`<p class="note" style="margin:0 0 8px">Map saved for offline use (${off.tiles} tiles, ${esc(off.style)}) on ${new Date(off.at).toLocaleDateString()}. The trail, profile and last forecast are saved too.</p><button class="btn" id="offBtn">Update offline map</button>`:`<p class="note" style="margin:0 0 8px">Download this trail's map so it works with no signal. Uses the current map style (${esc(R.base)}).</p><button class="btn primary" id="offBtn">Download for offline</button>`):`<p class="note" style="margin:0">Save this trail to a list to download its map for offline use.</p>`}</div>`;
   h+=`<div class="row" style="margin-top:14px"><button class="btn" id="gpx"${t.segs?"":" disabled"}>Download GPX</button><button class="btn" id="shareOne">Share</button></div>`;
   b.innerHTML=h; b.scrollTop=0;
 
@@ -1368,6 +1389,7 @@ function renderDetail(b){
   b.querySelectorAll("[data-list]").forEach(c=>c.onchange=()=>toggleList(t, c.dataset.list, c.checked));
   $("#notes")&&($("#notes").oninput=e=>{ S.saved[t.id].notes=e.target.value; save(); });
   $("#hiked")&&($("#hiked").onchange=e=>{ S.saved[t.id].hiked=e.target.value; save(); });
+  $("#offBtn")&&($("#offBtn").onclick=e=>{ e.target.disabled=true; saveOffline(t); });
   $("#gpx").onclick=()=>download(slug(t.name)+".gpx", trailGpx(t), "application/gpx+xml");
   $("#shareOne").onclick=()=>shareCode({ n:t.name, t:[mini(t)] }, t.name);
   bindProfile(t);
@@ -1541,9 +1563,11 @@ async function copy(text, msg){ try { await navigator.clipboard.writeText(text);
 function openSettings(){ const d=$("#settings");
   fillSettings(); if (!d.open) d.showModal(); }
 function fillSettings(){
+  offlineStats().then(st=>{ if (st&&st.n) $("#offNote").textContent=`${st.n} map tiles stored${st.mb!=null?`, about ${st.mb} MB used by this app`:""}.`; });
   document.querySelectorAll("#unitSeg button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.u===S.units));
   $("#homeIn").value=S.home?.label||""; $("#homeNote").textContent=S.home?"Drive times start from "+S.home.label+".":"Not set yet."; }
-$("#setBtn").onclick=openSettings; $("#closeSet").onclick=()=>$("#settings").close();
+$("#setBtn").onclick=openSettings;
+$("#offClear").onclick=async()=>{ try { await caches.delete(TILE_CACHE); } catch(e){} Object.values(S.saved).forEach(x=>{ delete x.offline; }); save(); $("#offNote").textContent="Offline maps deleted."; }; $("#closeSet").onclick=()=>$("#settings").close();
 $("#settings").addEventListener("close", ()=>render());
 document.querySelectorAll("#unitSeg button").forEach(b=>b.onclick=()=>{ S.units=b.dataset.u; R.wx={}; save(); openSettings(); if (R.sel) loadExtras(R.sel); });
 $("#homeForm").onsubmit=async e=>{ e.preventDefault(); const v=$("#homeIn").value.trim(); if (!v) return;
@@ -1553,6 +1577,151 @@ $("#homeGps").onclick=()=>navigator.geolocation?.getCurrentPosition(p=>setHome({
 function setHome(h){ S.home=h; save(); $("#homeIn").value=h.label; $("#homeNote").textContent="Drive times start from "+h.label+"."; if (R.sel) loadExtras(R.sel); }
 $("#wipe").onclick=()=>{ if (!confirm("Erase every saved trail, list and recording on this device?")) return; S=structuredClone(DEF); save(); $("#settings").close(); setTab("explore"); };
 window.openSettings=openSettings;
+
+/* ================= highlights (OSM points of interest along the trail) ================= */
+const HL = [
+  { k:"waterfall", ico:"💧", label:"Waterfall", r:150, test:t=>t.waterway==="waterfall"||t.natural==="waterfall" },
+  { k:"view", ico:"🔭", label:"Viewpoint", r:150, test:t=>t.tourism==="viewpoint" },
+  { k:"peak", ico:"⛰️", label:"Summit", r:200, test:t=>t.natural==="peak" },
+  { k:"lake", ico:"🏞️", label:"Lake", r:500, test:t=>t.natural==="water" },
+  { k:"cave", ico:"🕳️", label:"Cave", r:150, test:t=>t.natural==="cave_entrance" },
+  { k:"history", ico:"🏛️", label:"Historic site", r:150, test:t=>!!t.historic && t.historic!=="no" },
+  { k:"camp", ico:"⛺", label:"Campsite", r:200, test:t=>t.tourism==="camp_site" },
+  { k:"picnic", ico:"🧺", label:"Picnic area", r:200, test:t=>t.tourism==="picnic_site" },
+  { k:"shelter", ico:"🛖", label:"Shelter", r:150, test:t=>t.amenity==="shelter" },
+  { k:"toilets", ico:"🚻", label:"Toilets", r:200, test:t=>t.amenity==="toilets" },
+  { k:"water", ico:"🚰", label:"Drinking water", r:200, test:t=>t.amenity==="drinking_water" },
+];
+function trailPts(t){ // ordered points with distance from the trailhead, for "at 1.2 mi"
+  if (t.elev?.pts) return t.elev.pts.map((p,i)=>[p[0],p[1],t.elev.prof[i][0]]);
+  const path=orderPath(t.segs,t.head), step=Math.max(1,Math.floor(path.length/150)), out=[]; let d=0;
+  path.forEach((p,i)=>{ if (i) d+=Math.min(200,hav(path[i-1],p)); if (i%step===0) out.push([p[0],p[1],d]); }); return out;
+}
+async function loadHighlights(t){
+  const [s,w,n,e]=t.bbox, pad=0.005, bb=[s-pad,w-pad,n+pad,e+pad].map(x=>x.toFixed(5)).join(",");
+  const q=`[out:json][timeout:20];
+(node["waterway"="waterfall"](${bb});node["natural"~"^(peak|waterfall|cave_entrance)$"](${bb});node["tourism"~"^(viewpoint|picnic_site|camp_site)$"](${bb});node["amenity"~"^(toilets|drinking_water|shelter)$"](${bb});node["historic"](${bb}););
+out body;
+(way["natural"="water"]["name"](${bb});relation["natural"="water"]["name"](${bb}););
+out center;`;
+  const j=await overpass(q), pts=trailPts(t), items=[], seen=new Set();
+  for (const el of j.elements||[]){
+    const tg=el.tags||{}, ll=el.center?[el.center.lat,el.center.lon]:[el.lat,el.lon]; if (ll[0]==null) continue;
+    const kind=HL.find(h=>h.test(tg)); if (!kind) continue;
+    let best=Infinity, at=0; for (const p of pts){ const d=fd(ll,p); if (d<best){ best=d; at=p[2]; } }
+    if (best>kind.r) continue;
+    const name=tg.name||"", key=kind.k+"|"+(name||ll.map(x=>x.toFixed(3)).join());
+    if (seen.has(key)) continue; seen.add(key);
+    items.push({ k:kind.k, ico:kind.ico, label:kind.label, name, ll, at, ele:tg.ele });
+  }
+  items.sort((a,b)=>a.at-b.at);
+  return items;
+}
+function highlightsHtml(t){
+  const h=R.hl[t.id], tg=t.tags||{}, chips=[];
+  if (Array.isArray(h)) [...new Map(h.map(x=>[x.k,x])).values()].forEach(x=>chips.push(`${x.ico} ${x.label}${h.filter(y=>y.k===x.k).length>1?"s":""}`));
+  if (/^(yes|leashed)$/.test(tg.dog||"")) chips.push(tg.dog==="leashed"?"🐕 Dogs on leash":"🐕 Dogs allowed"); else if (tg.dog==="no") chips.push("🚫 No dogs");
+  if (t.kind==="bike") chips.push("🚵 Bike trail"); else if (t.kind==="shared") chips.push("🚲 Bikes allowed");
+  if (t.loop) chips.push("🔁 Loop");
+  let o=`<div class="lab">Highlights</div>`;
+  if (h==null) o+=`<p class="note"><span class="spin"></span> Looking for waterfalls, viewpoints and more…</p>`;
+  if (chips.length) o+=`<div class="hl">${chips.map(c=>`<span class="hlchip">${esc(c)}</span>`).join("")}</div>`;
+  else if (h!=null) o+=`<p class="note">Nothing notable is mapped along this trail.</p>`;
+  const named=Array.isArray(h)?h.filter(x=>x.name||x.k==="peak"||x.k==="waterfall"||x.k==="view"):[];
+  if (named.length) o+=`<ul class="hllist">${named.slice(0,10).map(x=>`<li>${x.ico} ${esc(x.name||x.label)}${x.ele&&x.k==="peak"?` (${fmtEl(+x.ele)})`:""} <span class="note">at ${fmtLen(x.at)}</span></li>`).join("")}</ul>`;
+  return o;
+}
+function drawHighlights(t){
+  const h=R.hl[t.id]; if (!Array.isArray(h) || R.sel!==t) return;
+  h.forEach(x=>L.marker(x.ll,{ icon:L.divIcon({ className:"hlpin", html:x.ico, iconSize:[24,24], iconAnchor:[12,12] }), title:x.name||x.label }).bindTooltip(esc(x.name||x.label)).addTo(selLayer));
+}
+
+/* ================= photos + description (Wikipedia / Wikimedia Commons) ================= */
+const WIKI_STOP=new Set("trail trails loop path the of via and to a in at route washington".split(" "));
+const tokens=s=>String(s).toLowerCase().replace(/\(.*?\)/g," ").split(/[^a-z0-9]+/).filter(w=>w && !WIKI_STOP.has(w));
+const GENERIC=new Set("mount mt lake falls river creek ridge peak park state upper lower old north south east west little big valley".split(" "));
+async function wapi(host, params){ const r=await fetch("https://"+host+"/w/api.php?"+new URLSearchParams({ format:"json", origin:"*", ...params })); if (!r.ok) throw new Error(host+" "+r.status); return r.json(); }
+const strip=html=>{ const d=document.createElement("div"); d.innerHTML=html||""; return (d.textContent||"").trim(); };
+async function loadMedia(t){
+  const out={ photos:[] }, pts=trailPts(t);
+  const hi=t.elev ? t.elev.pts[t.elev.prof.reduce((b,p,i,a)=>p[1]>a[b][1]?i:b,0)] : pts[Math.floor(pts.length/2)];
+  // 1. Wikipedia article: from the OSM wikipedia tag, else the best-matching article near the trail
+  let title=/^en:/.test(t.tags?.wikipedia||"") ? t.tags.wikipedia.slice(3) : null;
+  if (!title){
+    const mine=tokens(t.name); let best=null;
+    for (const c of [hi, t.head]){
+      const j=await wapi("en.wikipedia.org", { action:"query", list:"geosearch", gscoord:c[0].toFixed(5)+"|"+c[1].toFixed(5), gsradius:"8000", gslimit:"30" });
+      for (const g of j.query?.geosearch||[]){
+        const tk=tokens(g.title), shared=tk.filter(w=>mine.includes(w));
+        if (!shared.some(w=>!GENERIC.has(w))) continue;
+        const score=shared.length - 0.5*(tk.length-shared.length) - g.dist/20000;
+        if (!best || score>best.score) best={ score, title:g.title };
+      }
+      if (best) break;
+    }
+    title=best?.title||null;
+  }
+  if (title){
+    const j=await wapi("en.wikipedia.org", { action:"query", prop:"extracts|pageimages|info", exintro:"1", explaintext:"1", exsentences:"5", piprop:"thumbnail", pithumbsize:"800", inprop:"url", redirects:"1", titles:title });
+    const pg=Object.values(j.query?.pages||{})[0];
+    if (pg && pg.extract){ out.desc=pg.extract; out.title=pg.title; out.url=pg.fullurl; if (pg.thumbnail) out.lead={ thumb:pg.thumbnail.source, page:pg.fullurl, credit:"Wikipedia" }; }
+  }
+  // 2. Geotagged photos on Wikimedia Commons near the trailhead, middle and high point
+  const probes=[t.head, pts[Math.floor(pts.length/2)], hi, pts[pts.length-1]].filter(Boolean), seen=new Set();
+  for (const c of probes){
+    if (out.photos.length>=12) break;
+    const j=await wapi("commons.wikimedia.org", { action:"query", generator:"geosearch", ggscoord:c[0].toFixed(5)+"|"+c[1].toFixed(5), ggsradius:"500", ggslimit:"20", ggsnamespace:"6", prop:"imageinfo", iiprop:"url|mime|extmetadata", iiurlwidth:"480" });
+    for (const pg of Object.values(j.query?.pages||{})){
+      const ii=pg.imageinfo?.[0]; if (!ii || !/^image\/(jpeg|png|webp)$/.test(ii.mime) || seen.has(pg.title)) continue;
+      if (/\b(map|diagram|logo|chart|locator)\b/i.test(pg.title)) continue;
+      seen.add(pg.title);
+      const m=ii.extmetadata||{};
+      out.photos.push({ thumb:ii.thumburl||ii.url, page:ii.descriptionurl, credit:[strip(m.Artist?.value), m.LicenseShortName?.value].filter(Boolean).join(", ").slice(0,80), title:pg.title.replace(/^File:|\.\w+$/g,"") });
+    }
+  }
+  if (out.lead && !out.photos.some(p=>p.thumb===out.lead.thumb)) out.photos.unshift(out.lead);
+  return out;
+}
+function mediaHtml(t){
+  const m=R.media[t.id]; let o="";
+  if (m==null) return `<div class="lab">Photos</div><p class="note"><span class="spin"></span> Looking for photos…</p>`;
+  if (m==="err") return "";
+  if (m.photos.length) o+=`<div class="lab">Photos</div><div class="gallery">${m.photos.map(p=>`<a href="${esc(p.page)}" target="_blank" rel="noopener" title="${esc(p.title||"")}"><img src="${esc(p.thumb)}" alt="${esc(p.title||"Trail photo")}" loading="lazy"><span>${esc(p.credit||"")}</span></a>`).join("")}</div><p class="note">Photos from Wikimedia Commons taken near this trail. Tap one for its author and license.</p>`;
+  if (m.desc) o+=`<div class="box"><div class="lab" style="margin-top:0">About</div><p style="margin:0">${esc(m.desc)}</p><p class="note" style="margin:6px 0 0">From Wikipedia: <a href="${esc(m.url)}" target="_blank" rel="noopener">${esc(m.title)}</a> (CC BY-SA)</p></div>`;
+  return o;
+}
+
+/* ================= offline maps for saved trails ================= */
+const TILE_CACHE="sb-tiles";
+function tileList(t, tpl, subs){
+  const [s,w,n,e]=t.bbox, ps=(n-s)*0.15+0.002, pw=(e-w)*0.15+0.002, urls=[];
+  const X=(lng,z)=>Math.floor((lng+180)/360*2**z), Y=(lat,z)=>{ const r=lat*RAD; return Math.floor((1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*2**z); };
+  for (let z=11; z<=16; z++){
+    const x0=X(w-pw,z), x1=X(e+pw,z), y0=Y(n+ps,z), y1=Y(s-ps,z);
+    if (urls.length + (x1-x0+1)*(y1-y0+1) > 900) break; // keep a download reasonable
+    for (let x=x0;x<=x1;x++) for (let y=y0;y<=y1;y++){
+      const sd=subs.length?subs[Math.abs(x+y)%subs.length]:""; // same subdomain Leaflet would pick
+      urls.push(tpl.replace("{s}",sd).replace("{z}",z).replace("{x}",x).replace("{y}",y).replace("{r}",""));
+    }
+  }
+  return urls;
+}
+async function saveOffline(t){
+  if (!("caches" in window)){ toast("This browser can't store maps offline."); return; }
+  const layer=base[R.base]||base.Topo, tpl=layer._url, subs=layer.options.subdomains||[];
+  const urls=tileList(t, typeof subs==="string"?tpl:tpl, typeof subs==="string"?subs.split(""):subs);
+  const c=await caches.open(TILE_CACHE); let done=0, ok=0, i=0;
+  const btn=$("#offBtn"); const tick=()=>{ if (btn && R.sel===t) btn.textContent=`Downloading map… ${Math.round(done/urls.length*100)}%`; };
+  async function worker(){ while (i<urls.length){ const u=urls[i++];
+    try { if (await c.match(u)) ok++; else { const r=await fetch(u,{ mode:"cors" }); if (r.ok){ await c.put(u,r); ok++; } } } catch(e){}
+    done++; if (done%10===0) tick(); } }
+  tick(); await Promise.all([worker(),worker(),worker(),worker()]);
+  if (ok<urls.length*0.5){ toast(R.base+" map tiles can't be saved offline. Switch the map style to Esri Topo or Street and try again."); render(); return; }
+  if (S.saved[t.id]){ S.saved[t.id].offline={ at:Date.now(), tiles:ok, style:R.base }; const w=R.wx[t.head.join(",")]; if (Array.isArray(w)) S.saved[t.id].wx={ at:Date.now(), data:w }; save(); }
+  toast(`Saved for offline: ${ok} map tiles (${R.base}).`); render();
+}
+async function offlineStats(){ try { const c=await caches.open(TILE_CACHE); const n=(await c.keys()).length; const est=await navigator.storage?.estimate?.(); return { n, mb:est?Math.round(est.usage/1e6):null }; } catch(e){ return null; } }
+if ("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
 
 /* ================= boot ================= */
 render();
