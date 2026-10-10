@@ -7,7 +7,7 @@ const pg = await ctx.newPage();
 pg.on("pageerror", e => console.log("PAGEERROR", e.message));
 const step = async (name, fn) => { try { await fn(); console.log("OK", name); } catch (e) { console.log("FAIL", name, e.message.split("\n")[0]); } };
 const tiles = () => pg.evaluate(() => { const t = [...document.querySelectorAll(".leaflet-tile")]; return `${t.filter(x => x.complete && x.naturalWidth > 0).length} of ${t.length} loaded`; });
-for (let i = 0; i < 40; i++) { const r = await fetch(url + "?" + Date.now()); if (r.ok && (await r.text()).includes("Navigate this trail")) { console.log("new build live"); break; } await new Promise(r => setTimeout(r, 10000)); }
+for (let i = 0; i < 40; i++) { const r = await fetch(url + "?" + Date.now()); if (r.ok && (await r.text()).includes("trying a backup server")) { console.log("new build live"); break; } await new Promise(r => setTimeout(r, 10000)); }
 await step("load", () => pg.goto(url, { waitUntil: "load", timeout: 30000 }));
 console.log("BASE", await pg.evaluate(() => R.base), await pg.evaluate(() => document.querySelector(".leaflet-tile")?.src));
 await step("search", async () => { await pg.fill("#q", "North Bend"); await pg.press("#q", "Enter");
@@ -32,4 +32,15 @@ console.log("NAV3", (await pg.innerText("#nav")).replace(/\n/g, " | "));
 await step("zoom in to 18 offline", async () => { await pg.evaluate(() => map.setZoom(18)); await pg.waitForTimeout(3000); });
 console.log("Z18 TILES", await tiles());
 await pg.screenshot({ path: "shots/nav2.png" });
+// AllTrails listings in Honolulu (online again, fresh page)
+await ctx.setOffline(false);
+const p2 = await ctx.newPage(); p2.on("pageerror", e => console.log("PAGEERROR2", e.message));
+await step("hnl load", () => p2.goto(url, { waitUntil: "load", timeout: 30000 }));
+await step("hnl search", async () => { await p2.fill("#q", "Honolulu"); await p2.press("#q", "Enter"); await p2.waitForTimeout(3000);
+  if (await p2.locator("#suggest.show button").count()) await p2.click("#suggest button:has-text('Hawaii')"); });
+await step("hnl cards", () => p2.waitForSelector(".card", { timeout: 120000 }));
+await p2.waitForTimeout(3000);
+console.log("HNL", (await p2.innerText("#body")).replace(/\n/g, " | ").slice(0, 3000));
+console.log("AT CHIPS", await p2.locator(".card:not(.atcard) .chip.at").count(), "AT ONLY", await p2.locator(".atcard").count());
+await p2.screenshot({ path: "shots/hnl.png", fullPage: true });
 await b.close();
