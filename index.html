@@ -825,6 +825,16 @@ dialog h2{margin:0 0 4px;font:700 1.4rem var(--display);text-transform:uppercase
 .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--brand);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px}
 @keyframes sp{to{transform:rotate(360deg)}}
 .headpin{background:var(--accent);border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 6px rgba(0,0,0,.4)}
+.nav{position:fixed;z-index:30;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 62px);background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:14px;padding:10px 12px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+.nav[hidden]{display:none}
+body.navving .leaflet-top.leaflet-right{margin-top:96px}
+.navtop{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.85rem;color:var(--muted)}
+.navtop b{color:var(--ink)}
+.navtop .btn{padding:5px 10px;font-size:.82rem}
+.navmain{font-size:1.2rem;font-weight:700;margin:6px 0 2px}
+.navmain.off{color:#c0392b}
+.navsub{font-size:.88rem;color:var(--muted)}
+@media (min-width:900px){.nav{left:422px;right:auto;width:400px}}
 .me{background:#2b7bf3;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 6px rgba(43,123,243,.25)}
 .leaflet-container{font-family:var(--body)}
 </style>
@@ -845,6 +855,7 @@ dialog h2{margin:0 0 4px;font:700 1.4rem var(--display);text-transform:uppercase
 
 <button class="areabtn" id="areaBtn">Search trails in this area</button>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="nav" id="nav" hidden aria-live="polite"></div>
 
 <aside class="panel" id="panel">
   <button class="handle" id="handle" aria-label="Resize panel"><span></span></button>
@@ -903,7 +914,7 @@ function load(){
 function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){ toast("Storage is full or blocked; changes may not stick."); } }
 
 const R = { tab:"explore", trails:[], byId:{}, sel:null, filt:{ act:"hike", diff:"", len:"", sort:"best" }, center:null,
-  searching:false, searchErr:null, wx:{}, drive:{}, rec:null, layers:{}, hl:{}, media:{}, base:"Topo" };
+  searching:false, searchErr:null, wx:{}, drive:{}, rec:null, layers:{}, hl:{}, media:{}, base:"Esri Topo", nav:null };
 if (/^(hike|bike|all)$/.test(savedAct||"")) R.filt.act=savedAct;
 
 const $ = s => document.querySelector(s);
@@ -1111,8 +1122,9 @@ const base={
   "Satellite": L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom:19, attribution:"Imagery &copy; Esri, Maxar, Earthstar Geographics" }),
 };
 const over={ "Marked hiking routes": L.tileLayer("https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png", { maxZoom:18, opacity:.8, attribution:'&copy; <a href="https://hiking.waymarkedtrails.org">Waymarked Trails</a>' }) };
-base.Topo.addTo(map);
-map.on("baselayerchange", e=>{ R.base=e.name; });
+if (base[S.base]) R.base=S.base;
+base[R.base].addTo(map);
+map.on("baselayerchange", e=>{ R.base=S.base=e.name; save(); });
 let tileFails=0;
 base.Topo.on("tileerror", ()=>{ if (++tileFails===6 && map.hasLayer(base.Topo)){ map.removeLayer(base.Topo); base["Esri Topo"].addTo(map); R.base="Esri Topo"; toast("Switched to the Esri topo map because OpenTopoMap tiles weren't loading."); } });
 L.control.zoom({ position:"topright" }).addTo(map);
@@ -1338,6 +1350,9 @@ function renderDetail(b){
     <div class="stat"><div class="v">${t.elev||t.elevErr?fmtDur(estHours(t)):'<span class="spin"></span>'}</div><div class="k">Est. time</div></div>
   </div>`;
   if (!t.loop) h+=`<p class="note" style="margin:-4px 0 6px">One way: ${fmtLen(t.len)}${t.elev?`, ${fmtEl(t.elev.gain)} up and ${fmtEl(t.elev.loss)} down from the trailhead`:""}.</p>`;
+  if (t.segs){ const off=S.saved[t.id]?.offline;
+    h+=`<div class="row" style="margin:4px 0 8px"><button class="btn primary" id="navBtn">${R.nav?.t.id===t.id?"End navigation":"Navigate this trail"}</button></div>`;
+    if (!off && !R.nav) h+=`<p class="note" style="margin:-2px 0 8px">No signal on the trail? Save it to a list and download its offline map below first.</p>`; }
   h+=highlightsHtml(t)+mediaHtml(t);
   if (t.elev) h+=`<div class="lab">Elevation profile</div>${profileSvg(t)}<p class="note">High point ${fmtEl(t.elev.max)}, low point ${fmtEl(t.elev.min)}. Drag across the chart to follow it on the map.</p>`;
   else if (t.elevErr) h+=`<p class="note">Elevation data is unavailable right now.</p>`;
@@ -1390,6 +1405,7 @@ function renderDetail(b){
   b.querySelectorAll("[data-list]").forEach(c=>c.onchange=()=>toggleList(t, c.dataset.list, c.checked));
   $("#notes")&&($("#notes").oninput=e=>{ S.saved[t.id].notes=e.target.value; save(); });
   $("#hiked")&&($("#hiked").onchange=e=>{ S.saved[t.id].hiked=e.target.value; save(); });
+  $("#navBtn")&&($("#navBtn").onclick=()=>{ if (R.nav?.t.id===t.id) stopNav(); else startNav(t); });
   $("#offBtn")&&($("#offBtn").onclick=e=>{ e.target.disabled=true; saveOffline(t); });
   $("#gpx").onclick=()=>download(slug(t.name)+".gpx", trailGpx(t), "application/gpx+xml");
   $("#shareOne").onclick=()=>shareCode({ n:t.name, t:[mini(t)] }, t.name);
@@ -1697,17 +1713,22 @@ function mediaHtml(t){
 /* ================= offline maps for saved trails ================= */
 const TILE_CACHE="sb-tiles";
 function tileList(t, tpl, subs){
-  const [s,w,n,e]=t.bbox, ps=(n-s)*0.15+0.006, pw=(e-w)*0.15+0.009, urls=[];
+  const [s,w,n,e]=t.bbox, ps=(n-s)*0.15+0.006, pw=(e-w)*0.15+0.009, keys=[];
   const X=(lng,z)=>Math.floor((lng+180)/360*2**z), Y=(lat,z)=>{ const r=lat*RAD; return Math.floor((1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*2**z); };
-  for (let z=11; z<=16; z++){
+  for (let z=11; z<=15; z++){ // the whole area around the trail
     const x0=X(w-pw,z), x1=X(e+pw,z), y0=Y(n+ps,z), y1=Y(s-ps,z);
-    if (urls.length + (x1-x0+1)*(y1-y0+1) > 900) break; // keep a download reasonable
-    for (let x=x0;x<=x1;x++) for (let y=y0;y<=y1;y++){
-      const sd=subs.length?subs[Math.abs(x+y)%subs.length]:""; // same subdomain Leaflet would pick
-      urls.push(tpl.replace("{s}",sd).replace("{z}",z).replace("{x}",x).replace("{y}",y).replace("{r}",""));
-    }
-  }
-  return urls;
+    if ((x1-x0+1)*(y1-y0+1) > 600) break;
+    for (let x=x0;x<=x1;x++) for (let y=y0;y<=y1;y++) keys.push([z,x,y]); }
+  const pts=[]; // points every ~40 m along the trail, for the close-up zooms
+  for (const sg of t.segs||[]) for (let i=0;i<sg.length;i++){ pts.push(sg[i]); if (i){ const a=sg[i-1], b=sg[i], k=Math.floor(hav(a,b)/40);
+    for (let j=1;j<k;j++) pts.push([a[0]+(b[0]-a[0])*j/k, a[1]+(b[1]-a[1])*j/k]); } }
+  for (const z of [16,17]){ const seen=new Set(), add=[];
+    for (const p of pts){ const x=X(p[1],z), y=Y(p[0],z);
+      for (let dx=-1;dx<=1;dx++) for (let dy=-1;dy<=1;dy++){ const k=(x+dx)+"/"+(y+dy); if (!seen.has(k)){ seen.add(k); add.push([z,x+dx,y+dy]); } } }
+    if (keys.length+add.length > 2500) break; // keep a download reasonable
+    keys.push(...add); }
+  return keys.map(([z,x,y])=>{ const sd=subs.length?subs[Math.abs(x+y)%subs.length]:""; // same subdomain Leaflet would pick
+    return tpl.replace("{s}",sd).replace("{z}",z).replace("{x}",x).replace("{y}",y).replace("{r}",""); });
 }
 async function saveOffline(t){
   if (!("caches" in window)){ toast("This browser can't store maps offline."); return; }
@@ -1725,6 +1746,85 @@ async function saveOffline(t){
 }
 async function offlineStats(){ try { const c=await caches.open(TILE_CACHE); const n=(await c.keys()).length; const est=await navigator.storage?.estimate?.(); return { n, mb:est?Math.round(est.usage/1e6):null }; } catch(e){ return null; } }
 if ("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
+
+/* ================= navigate ================= */
+const COMPASS=["north","northeast","east","southeast","south","southwest","west","northwest"];
+const fmtNear=m=>imp() ? (m<161 ? Math.round(m*3.28084/10)*10+" ft" : fmtLen(m)) : (m<1000 ? Math.round(m/5)*5+" m" : fmtLen(m));
+function bearing(a,b){ const y=Math.sin((b[1]-a[1])*RAD)*Math.cos(b[0]*RAD), x=Math.cos(a[0]*RAD)*Math.sin(b[0]*RAD)-Math.sin(a[0]*RAD)*Math.cos(b[0]*RAD)*Math.cos((b[1]-a[1])*RAD);
+  return (Math.atan2(y,x)/RAD+360)%360; }
+const compass=(a,b)=>COMPASS[Math.round(bearing(a,b)/45)%8];
+function navPath(t){ const path=orderPath(t.segs, t.head), cum=[0];
+  for (let i=1;i<path.length;i++){ const d=hav(path[i-1],path[i]); cum.push(cum[i-1]+(d>200?0:d)); } // same distances as the elevation profile
+  return { path, cum, total:cum[cum.length-1]||1 }; }
+/* Nearest point on the trail: how far off it you are and how far along it that point is. */
+function snapTo(nv, ll){
+  const kx=Math.cos(ll[0]*RAD)*111320, ky=111320; let best={ off:Infinity, at:0, p:nv.path[0] };
+  for (let i=1;i<nv.path.length;i++){ const a=nv.path[i-1], b=nv.path[i];
+    if (nv.cum[i]===nv.cum[i-1] && hav(a,b)>200) continue; // gap between separate pieces
+    const ax=(a[1]-ll[1])*kx, ay=(a[0]-ll[0])*ky, dx=(b[1]-a[1])*kx, dy=(b[0]-a[0])*ky, L2=dx*dx+dy*dy;
+    const f=L2 ? Math.max(0,Math.min(1,-(ax*dx+ay*dy)/L2)) : 0, off=Math.hypot(ax+f*dx, ay+f*dy);
+    if (off<best.off) best={ off, at:nv.cum[i-1]+f*(nv.cum[i]-nv.cum[i-1]), p:[a[0]+f*(b[0]-a[0]), a[1]+f*(b[1]-a[1])] }; }
+  return best; }
+function eleAt(t, at){ const p=t.elev?.prof; if (!p) return null;
+  for (let i=1;i<p.length;i++) if (p[i][0]>=at){ const f=(at-p[i-1][0])/((p[i][0]-p[i-1][0])||1); return p[i-1][1]+f*(p[i][1]-p[i-1][1]); }
+  return p[p.length-1][1]; }
+async function navWakeLock(){ try { if (R.nav && document.visibilityState==="visible") R.nav.wake=await navigator.wakeLock?.request("screen"); } catch(e){} }
+document.addEventListener("visibilitychange", navWakeLock); // the screen lock is dropped whenever the app is hidden
+function startNav(t){
+  if (!navigator.geolocation){ toast("This browser can't share your location."); return; }
+  if (!t.segs){ toast("This trail's map line hasn't loaded, so it can't be navigated."); return; }
+  stopNav(true);
+  const nv=Object.assign(navPath(t), { t, follow:true, isOff:false, last:null, s:null });
+  nv.line=L.polyline(t.segs, { color:css(DCOL[difficulty(t)]), weight:5, opacity:.9, interactive:false }).addTo(map);
+  nv.acc=L.circle(t.head, { radius:1, color:"#2b7bf3", weight:1, fillOpacity:.12, interactive:false });
+  nv.me=L.marker(t.head, { icon:L.divIcon({ className:"me", iconSize:[16,16] }), interactive:false, zIndexOffset:1000 });
+  R.nav=nv; document.body.classList.add("navving"); navWakeLock();
+  nv.watch=navigator.geolocation.watchPosition(navFix, e=>{ nv.err=e.code===1 ? "Location is turned off for this site. Allow it in your browser's settings." : "Waiting for a GPS signal…"; navDraw(); },
+    { enableHighAccuracy:true, maximumAge:3000, timeout:30000 });
+  map.on("dragstart", navUnfollow);
+  sheet("peek"); navDraw(); render();
+}
+function navUnfollow(){ if (R.nav && R.nav.follow){ R.nav.follow=false; navDraw(); } }
+function stopNav(silent){ const nv=R.nav; if (!nv) return;
+  navigator.geolocation.clearWatch(nv.watch); [nv.line, nv.acc, nv.me].forEach(l=>map.hasLayer(l)&&map.removeLayer(l));
+  try { nv.wake?.release(); } catch(e){} map.off("dragstart", navUnfollow); R.nav=null; document.body.classList.remove("navving"); navDraw(); if (!silent) render(); }
+function navFix(p){ const nv=R.nav; if (!nv) return;
+  const ll=[p.coords.latitude, p.coords.longitude], acc=p.coords.accuracy||0, first=!nv.last;
+  nv.last={ ll, acc }; nv.err=null;
+  if (!map.hasLayer(nv.me)){ nv.acc.addTo(map); nv.me.addTo(map); }
+  nv.me.setLatLng(ll); nv.acc.setLatLng(ll).setRadius(acc);
+  nv.s=snapTo(nv, ll);
+  const off=nv.s.off > Math.max(60, acc); // allow for GPS error before calling it off trail
+  if (off && !nv.isOff) navigator.vibrate?.([250,120,250]);
+  nv.isOff=off;
+  if (nv.follow) map.setView(ll, first ? 16 : map.getZoom(), { animate:!first });
+  navDraw();
+}
+function navDraw(){
+  const e=$("#nav"), nv=R.nav; if (!nv){ e.hidden=true; e.innerHTML=""; return; }
+  const t=nv.t; let main, sub=[];
+  if (nv.err && !nv.last) main=nv.err;
+  else if (!nv.last) main="Finding your location…";
+  else { const s=nv.s, me=nv.last.ll;
+    if (s.off>1500){ main=`${fmtLen(hav(me,t.head))} to the trailhead`; sub.push(`It's to the ${compass(me,t.head)}. Use Google or Apple Maps from the trail details to drive there.`); }
+    else if (nv.isOff){ main=`Off trail, ${fmtNear(s.off)} away`; sub.push(`The trail is to the ${compass(me,s.p)}.`); }
+    else { main=t.loop ? `${fmtLen(s.at)} done, ${fmtLen(nv.total-s.at)} left` : `${fmtLen(s.at)} in, ${fmtLen(nv.total-s.at)} to the end`;
+      const el=eleAt(t,s.at); if (el!=null) sub.push(`Elevation ${fmtEl(el)}`);
+      const next=(Array.isArray(R.hl[t.id])?R.hl[t.id]:[]).filter(x=>x.at>s.at+40).sort((a,b)=>a.at-b.at)[0];
+      if (next) sub.push(`${next.ico} ${next.name||next.label} in ${fmtNear(next.at-s.at)}`);
+      if (!t.loop && s.at>100) sub.push(`${fmtLen(s.at)} back to the trailhead`); }
+    if (nv.last.acc>40) sub.push(`Weak GPS (±${fmtNear(nv.last.acc)})`); }
+  e.hidden=false;
+  e.innerHTML=`<div class="navtop"><span>Navigating <b>${esc(t.name)}</b></span><span>${nv.follow?"":`<button class="btn" id="navCenter">Recenter</button> `}<button class="btn" id="navEnd">End</button></span></div>
+    <div class="navmain${nv.isOff?" off":""}">${esc(main)}</div>${sub.length?`<div class="navsub">${sub.map(esc).join(" · ")}</div>`:""}`;
+  $("#navEnd").onclick=()=>stopNav();
+  $("#navCenter")&&($("#navCenter").onclick=()=>{ nv.follow=true; if (nv.last) map.setView(nv.last.ll, Math.max(map.getZoom(),15)); navDraw(); });
+}
+/* With no signal, show the most detailed saved tiles enlarged instead of blank squares when zoomed past them. */
+function offlineZoom(){ const offline=navigator.onLine===false;
+  for (const l of Object.values(base)){ const want=offline ? 17 : undefined;
+    if (l.options.maxNativeZoom!==want){ l.options.maxNativeZoom=want; if (map.hasLayer(l)){ map.removeLayer(l); map.addLayer(l); } } } }
+addEventListener("online", offlineZoom); addEventListener("offline", offlineZoom); offlineZoom();
 
 /* ================= boot ================= */
 render();
