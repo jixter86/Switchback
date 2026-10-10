@@ -8,7 +8,7 @@ pg.on("pageerror", e => console.log("PAGEERROR", e.message));
 pg.on("response", r => { if (r.status() >= 400) console.log("HTTP", r.status(), r.url().slice(0, 140)); });
 const step = async (name, fn) => { try { await fn(); console.log("OK", name); } catch (e) { console.log("FAIL", name, e.message.split("\n")[0]); } };
 // wait for the deploy carrying sw.js
-for (let i = 0; i < 30; i++) { const r = await fetch(url + "sw.js?" + Date.now()); if (r.ok) { console.log("sw.js live"); break; } await new Promise(r => setTimeout(r, 10000)); }
+for (let i = 0; i < 40; i++) { const r = await fetch(url + "?" + Date.now()); if (r.ok && (await r.text()).includes("mix photographers")) { console.log("new build live"); break; } await new Promise(r => setTimeout(r, 10000)); }
 await step("load", () => pg.goto(url, { waitUntil: "load", timeout: 30000 }));
 await step("search", async () => { await pg.fill("#q", "North Bend"); await pg.press("#q", "Enter");
   await pg.waitForSelector("#suggest.show button", { timeout: 15000 }); await pg.click("#suggest button:has-text('Washington')"); });
@@ -29,6 +29,10 @@ for (const name of ["Little Si", "Mount Si Trail", "Rattlesnake Ledge"]) {
     await pg.waitForTimeout(3000);
     console.log("OFFLINE BODY", (await pg.innerText("body")).slice(0, 600).replace(/\n/g, " | "));
     console.log("OFFLINE TILES", await pg.evaluate(() => [...document.querySelectorAll(".leaflet-tile")].filter(t => t.complete && t.naturalWidth > 0).length));
+    await step("offline saved trail", async () => { await pg.click("text=Saved"); await pg.waitForTimeout(1500);
+      await pg.click("text=Little Si >> nth=0"); await pg.waitForTimeout(6000);
+      console.log("OFFLINE DETAIL", (await pg.innerText("#body")).slice(0, 900).replace(/\n/g, " | "));
+      console.log("OFFLINE TRAIL TILES", await pg.evaluate(() => [...document.querySelectorAll(".leaflet-tile")].filter(t => t.complete && t.naturalWidth > 0).length), "of", await pg.locator(".leaflet-tile").count()); });
     await pg.screenshot({ path: "shots/offline.png" });
     await ctx.setOffline(false); await pg.reload({ waitUntil: "load" });
     await step("research", async () => { await pg.fill("#q", "North Bend"); await pg.press("#q", "Enter");
