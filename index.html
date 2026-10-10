@@ -1376,7 +1376,7 @@ async function loadExtras(t){
   if (!t.segs) t.elevErr=true;
   if (!t.elev && t.segs) jobs.push(computeElev(t).catch(()=>{ t.elevErr=true; }));
   const hk=t.head.join(",");
-  if (!R.wx[hk]) jobs.push((async()=>{ try { R.wx[hk]=await getWeather(t.head); if (S.saved[t.id]){ S.saved[t.id].wx={ at:Date.now(), data:R.wx[hk] }; save(); } }
+  if (!R.wx[hk] || Date.now()-(R.wxAt?.[hk]||0)>3600e3) jobs.push((async()=>{ try { R.wx[hk]=await getWeather(t.head); (R.wxAt||(R.wxAt={}))[hk]=Date.now(); if (S.saved[t.id]){ S.saved[t.id].wx={ at:Date.now(), data:R.wx[hk] }; save(); } }
     catch(e){ const c=S.saved[t.id]?.wx; R.wx[hk]=c ? c.data : "err"; if (c) R.wxOld=c.at; } })());
   if (t.segs && (R.hl[t.id]==null || R.hl[t.id]==="err")){ R.hl[t.id]=null; jobs.push(loadHighlights(t).then(x=>{ R.hl[t.id]=x; if (S.saved[t.id]){ S.saved[t.id].hl=x; save(); } drawHighlights(t); }).catch(()=>{ R.hl[t.id]=S.saved[t.id]?.hl||"err"; })); }
   if (t.segs && R.media[t.id]==null) jobs.push(loadMedia(t).then(x=>{ R.media[t.id]=x; }).catch(()=>{ R.media[t.id]="err"; }));
@@ -1910,6 +1910,16 @@ function bindWeatherBoard(b){
   b.querySelectorAll("[data-open]").forEach(x=>x.onclick=()=>openTrail(x.dataset.open));
   $("#wxRefresh")&&($("#wxRefresh").onclick=()=>loadHourly(true));
 }
+
+/* Keep forecasts fresh: anything over an hour old is fetched again while the app is open, when it comes back to the screen, or when the connection returns. */
+function refreshStaleWeather(){
+  if (document.visibilityState!=="visible" || navigator.onLine===false) return;
+  if (R.tab==="saved" && !R.sel) loadHourly();
+  const t=R.sel; if (t && t.head){ const hk=t.head.join(","); if (Date.now()-(R.wxAt?.[hk]||0)>3600e3 && R.wx[hk]!=null) loadExtras(t); }
+}
+setInterval(refreshStaleWeather, 5*60e3);
+document.addEventListener("visibilitychange", refreshStaleWeather);
+addEventListener("online", ()=>{ R.hwxTry=0; refreshStaleWeather(); });
 
 /* ================= AllTrails listings ================= */
 /* alltrails.json holds AllTrails trails fetched through the AllTrails connector, per area. AllTrails gives no coordinates,
