@@ -17,7 +17,7 @@ for (const [c, z, pick] of [[[47.49, -121.77], 13, "Rattlesnake Ledge Trail"], [
   const id = await pg.evaluate(n => R.trails.find(t => t.name === n)?.id, pick);
   if (id) { await pg.evaluate(id => openTrail(id), id); await pg.waitForTimeout(1500);
     console.log("OPENED", await pg.evaluate(() => [R.sel.name, Math.round(R.sel.len), R.sel.headSrc]));
-    await pg.click("text=Want to go"); await pg.waitForTimeout(300);
+    await pg.evaluate(() => document.querySelector("[data-list]").click()); await pg.waitForTimeout(300);
     console.log("SAVED", JSON.stringify(await pg.evaluate(() => Object.values(S.saved).map(x => [x.name, x.atId]))));
     await pg.screenshot({ path: `shots/atmap-${c[0]}.png` });
   } else console.log("NOT FOUND", pick);
