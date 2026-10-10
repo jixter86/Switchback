@@ -20,7 +20,9 @@ await step("search place", async () => { await pg.fill("#q", "North Bend"); awai
 await step("trail cards", () => pg.waitForSelector(".card", { timeout: 45000 }));
 console.log("BODY", (await pg.innerText("#body")).slice(0, 800).replace(/\n/g, " | "));
 await pg.screenshot({ path: "shots/2-list.png" });
-await step("open trail", async () => { await pg.click(".card >> nth=0"); await pg.waitForTimeout(8000); });
+await pg.waitForTimeout(20000);
+console.log("BODY2", (await pg.innerText("#body")).slice(0, 1400).replace(/\n/g, " | "));
+await step("open trail", async () => { await pg.click(".card:has-text('Little Si') >> nth=0"); await pg.waitForTimeout(8000); });
 console.log("DETAIL", (await pg.innerText("#body")).slice(0, 1200).replace(/\n/g, " | "));
 await pg.screenshot({ path: "shots/3-detail.png" });
 await b.close();
