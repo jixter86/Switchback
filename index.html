@@ -895,6 +895,33 @@ body.mapfull .leaflet-bottom{bottom:0}
   body.mapfull .areabtn,body.mapfull .toast{left:50%}
 }
 body.navving .mapbtn{display:none}
+/* trail preview card */
+.pv{position:fixed;z-index:17;left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);background:var(--panel);color:var(--ink);border-radius:16px;box-shadow:0 8px 28px rgba(0,0,0,.3);padding:10px;max-width:520px;margin:0 auto}
+.pv[hidden]{display:none}
+.pvx{position:absolute;top:4px;right:6px;border:0;background:none;font-size:1.6rem;line-height:1;color:var(--muted);padding:4px 8px;z-index:2}
+.pvmain{display:flex;gap:11px;cursor:pointer;padding-right:26px}
+.pvthumb{position:relative;flex:0 0 96px;width:96px;height:96px;border-radius:12px;overflow:hidden;background:var(--panel2)}
+.tmap{position:absolute;left:0;top:0;transform:scale(.5);transform-origin:0 0}
+.tmap img{position:absolute;width:256px;height:256px}
+.tmap svg{position:absolute;left:0;top:0}
+.pvphoto{position:absolute;inset:0;background:center/cover no-repeat;opacity:0;transition:opacity .3s}
+.pvphoto.on{opacity:1}
+.pvtext{min-width:0;display:flex;flex-direction:column;gap:5px}
+.pvname{font:700 1.05rem/1.2 var(--display);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.pvstats{display:flex;flex-wrap:wrap;gap:2px 10px;font-size:.85rem;color:var(--muted)}
+.pvnav{display:flex;align-items:center;gap:8px;margin-top:9px}
+.pvnav .note{flex:1;text-align:center;font-size:.8rem}
+.pvnav .pvgo{flex:0 0 auto}
+.pvprev,.pvnext{font-size:1.3rem;padding:4px 14px;line-height:1}
+.pvprev[disabled],.pvnext[disabled]{opacity:.35}
+body.pving .mapbtn{bottom:calc(env(safe-area-inset-bottom,0px) + var(--pvh,170px) + 20px)}
+body.pving .leaflet-bottom{bottom:calc(var(--pvh,170px) + 14px)}
+@media (min-width:900px){
+  .pv{left:calc(410px + 16px);right:16px;margin:0 auto;max-width:480px}
+  body.mapfull .pv{left:16px}
+  body.pving .mapbtn{bottom:auto}
+}
+
 
 .navtop{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.85rem;color:var(--muted)}
 .navtop b{color:var(--ink)}
@@ -930,6 +957,7 @@ body.navving .mapbtn{display:none}
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div class="nav" id="nav" hidden aria-live="polite"></div>
 <button class="mapbtn" id="mapBtn" type="button" aria-pressed="false"></button>
+<div class="pv" id="pv" hidden></div>
 
 <aside class="panel" id="panel">
   <button class="handle" id="handle" aria-label="Resize panel"><span></span></button>
@@ -1213,7 +1241,7 @@ let meMarker=null, meWatch=null, cursor=null;
 
 map.on("moveend", ()=>{
   S.view={ c:[+map.getCenter().lat.toFixed(5), +map.getCenter().lng.toFixed(5)], z:map.getZoom() }; save();
-  if (R.tab==="explore" && !R.sel) $("#areaBtn").classList.add("show");
+  if (R.tab==="explore" && !R.sel && !R.pv) $("#areaBtn").classList.add("show");
 });
 
 function drawTrails(){
@@ -1224,7 +1252,7 @@ function drawTrails(){
     const line=L.polyline(t.segs, { color:col, weight:4, opacity:.85 }).addTo(trailLayer);
     const hit=L.polyline(t.segs, { color:"#000", weight:18, opacity:0 }).addTo(trailLayer); // fat tap target
     const dot=L.circleMarker(t.head, { radius:5, color:"#fff", weight:2, fillColor:css("--accent"), fillOpacity:1 }).addTo(trailLayer);
-    [hit,dot].forEach(l=>{ l.on("click", ()=>openTrail(t.id)); l.bindTooltip(t.name, { sticky:true }); });
+    [hit,dot].forEach(l=>{ l.on("click", e=>{ L.DomEvent.stop(e); previewTrail(t.id, visibleTrails().map(x=>x.id)); }); l.bindTooltip(t.name, { sticky:true }); });
     t._line=line;
   }
 }
@@ -1353,7 +1381,7 @@ function mapFull(on){ const b=document.body, was=b.classList.contains("mapfull")
   b.classList.toggle("mapfull", on);
   const btn=$("#mapBtn"); btn.innerHTML=on?LIST_IC+"List":MAP_IC+"Map"; btn.setAttribute("aria-pressed", on); btn.setAttribute("aria-label", on?"Show list":"Full-screen map");
   if (was!==on){ const c=map.getCenter(); setTimeout(()=>{ map.invalidateSize({ pan:false }); if (matchMedia("(min-width:900px)").matches) map.panTo(c, { animate:false }); }, 280); } }
-$("#mapBtn").onclick=()=>mapFull(!document.body.classList.contains("mapfull"));
+$("#mapBtn").onclick=()=>{ const on=!document.body.classList.contains("mapfull"); if (!on) closePreview(); mapFull(on); };
 mapFull(false);
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
 function setTab(t){ R.tab=t; if (t!=="explore") $("#areaBtn").classList.remove("show");
@@ -1373,7 +1401,8 @@ function card(t, extra){
     <span class="meta"><span class="chip ${d}">${d}</span>${t.kind==="bike"?'<span class="chip plain">Bike trail</span>':t.kind==="shared"?'<span class="chip plain">Hike + bike</span>':""}${S.saved[t.id]?.offline?'<span class="chip plain">Offline</span>':""}${(a=>a?`<span class="chip at">AllTrails ★ ${a.r.toFixed(1)}</span>${popChip(a)}`:"")(atFor(t))}<span>${fmtLen(t.loop?t.len:t.len*2)} ${t.loop?"loop":"round trip"}</span>${t.elev?`<span>&#8599; ${fmtEl(t.elev.gain+(t.loop?0:t.elev.loss))}</span>`:""}${dist!=null?`<span>${fmtLen(dist)} away</span>`:""}${extra||""}</span>
   </button>`;
 }
-function bindCards(root){ root.querySelectorAll(".card").forEach(c=>{ c.onclick=()=>openTrail(c.dataset.id);
+function bindCards(root){ const ids=[...root.querySelectorAll(".card[data-id]")].map(c=>c.dataset.id);
+  root.querySelectorAll(".card[data-id]").forEach(c=>{ c.onclick=()=>previewTrail(c.dataset.id, ids);
   c.onmouseenter=()=>highlight(c.dataset.id,true); c.onmouseleave=()=>highlight(c.dataset.id,false); }); }
 
 function renderExplore(b){
@@ -1418,7 +1447,7 @@ async function openTrail(id){
   }
   if (S.elev[id] && !t.elev) t.elev=S.elev[id];
   if (S.saved[id]?.hl && R.hl[id]==null) R.hl[id]=S.saved[id].hl;
-  R.sel=t; sheet("full"); render();
+  hidePreview(); R.sel=t; sheet("full"); render();
   if (t.segs){ selLayer.clearLayers();
     L.polyline(t.segs, { color:"#fff", weight:9, opacity:.9 }).addTo(selLayer);
     L.polyline(t.segs, { color:css(DCOL[difficulty(t)]), weight:5 }).addTo(selLayer);
@@ -1525,7 +1554,7 @@ function renderDetail(b){
   const keep=b.scrollTop; b.innerHTML=h; b.scrollTop=R._detailId===t.id?keep:0; R._detailId=t.id;
   attachPreview(t);
 
-  $("#back").onclick=()=>{ closeTrail(); sheet("half"); };
+  $("#back").onclick=()=>{ const back=R.pvBack; R.pvBack=null; closeTrail(); if (back && pvTrail(back)) previewTrail(back); else sheet("half"); };
   $("#copyC").onclick=()=>copy(t.head[0].toFixed(6)+", "+t.head[1].toFixed(6), "Coordinates copied");
   b.querySelectorAll("[data-list]").forEach(c=>c.onchange=()=>toggleList(t, c.dataset.list, c.checked));
   $("#notes")&&($("#notes").oninput=e=>{ S.saved[t.id].notes=e.target.value; save(); });
@@ -2043,8 +2072,8 @@ function mergeAT(bounds){
     R.trails.push(t); R.byId[t.id]=t; } }
 async function openAT(id){
   const x=atById(id); if (!x) return;
-  const hit=R.trails.find(t=>t.atId===id || atNorm(t.name)===atNorm(x.n)); if (hit) return openTrail(hit.id);
-  if (x.geo){ const t=atGeoTrail(x, atArea(x)); R.trails.push(t); R.byId[t.id]=t; return openTrail(t.id); }
+  const hit=R.trails.find(t=>t.atId===id || atNorm(t.name)===atNorm(x.n)); if (hit) return previewTrail(hit.id);
+  if (x.geo){ const t=atGeoTrail(x, atArea(x)); R.trails.push(t); R.byId[t.id]=t; return previewTrail(t.id); }
   if (navigator.onLine===false){ toast("You're offline. Open it in AllTrails when you have signal."); return; }
   const main=x.n.split(/\s+(?:via|to|from)\s+|:|\(/i)[0], viaPart=(x.n.match(/\s+via\s+(.+)$/i)||[])[1];
   const keys=[atTok(main).slice(0,2), viaPart?atTok(viaPart).slice(0,2):null].filter(k=>k&&k.length);
@@ -2069,9 +2098,9 @@ out;`;
     const sc=ov/Math.max(tk.length,1) + ov/want.length + (t.osm?.t==="r"?.3:0) + .5*lenFit;
     if (sc>bs){ bs=sc; best=t; } }
   if (!best){ toast("OpenStreetMap has no trail called "+x.n+" here. Use the AllTrails link on its card."); return; }
-  if (R.byId[best.id]){ toast("Closest trail on the map: "+R.byId[best.id].name); return openTrail(best.id); }
+  if (R.byId[best.id]){ toast("Closest trail on the map: "+R.byId[best.id].name); return previewTrail(best.id); }
   best.name=x.n; best.atId=x.id; R.trails.push(best); R.byId[best.id]=best;
-  openTrail(best.id); }
+  previewTrail(best.id); }
 function atBox(t){ const x=atFor(t);
   if (x) return `<div class="box atbox"><div class="lab" style="margin-top:0"><span class="chip at">AllTrails</span></div>
     <p style="margin:6px 0"><b>${esc(x.n)}</b>: ★ ${x.r.toFixed(1)}, ${esc(x.d)}, ${fmtLen(x.l)} ${RT[x.rt]||""}, ${fmtEl(x.g)} gain.</p>
@@ -2080,6 +2109,70 @@ function atBox(t){ const x=atFor(t);
   return `<div class="box atbox"><div class="lab" style="margin-top:0"><span class="chip at">AllTrails</span></div>
     <p class="note" style="margin:6px 0 8px">Not in Switchback's AllTrails list for this area.</p>
     <a class="btn" href="https://www.google.com/search?q=${encodeURIComponent("site:alltrails.com "+t.name)}" target="_blank" rel="noopener">Find on AllTrails</a></div>`; }
+
+
+/* ================= trail preview card (map stays visible) ================= */
+R.thumbs={};
+function thumbMap(t, W){ // little topo map of the trail: Esri tiles + the trail line
+  const bb=t.bbox, S2=W*2; let z=16;
+  for (; z>3; z--){ const a=map.project([bb[0],bb[1]], z), b=map.project([bb[2],bb[3]], z); if (Math.abs(b.x-a.x)<S2*.7 && Math.abs(b.y-a.y)<S2*.7) break; }
+  const c=map.project([(bb[0]+bb[2])/2,(bb[1]+bb[3])/2], z), ox=c.x-S2/2, oy=c.y-S2/2;
+  let tiles=""; for (let tx=Math.floor(ox/256); tx<=Math.floor((ox+S2)/256); tx++) for (let ty=Math.floor(oy/256); ty<=Math.floor((oy+S2)/256); ty++)
+    tiles+=`<img src="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/${z}/${ty}/${tx}" style="left:${Math.round(tx*256-ox)}px;top:${Math.round(ty*256-oy)}px" alt="">`;
+  const path=(t.segs||[]).map(sg=>"M"+sg.map(p=>{ const q=map.project(p, z); return (q.x-ox).toFixed(1)+" "+(q.y-oy).toFixed(1); }).join("L")).join("");
+  const h=map.project(t.head, z);
+  return `<div class="tmap" style="width:${S2}px;height:${S2}px">${tiles}<svg width="${S2}" height="${S2}"><path d="${path}" fill="none" stroke="#fff" stroke-width="9" stroke-linejoin="round" stroke-linecap="round"/><path d="${path}" fill="none" stroke="${css(DCOL[difficulty(t)])}" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${(h.x-ox).toFixed(1)}" cy="${(h.y-oy).toFixed(1)}" r="7" fill="${css("--accent")}" stroke="#fff" stroke-width="3"/></svg></div>`; }
+async function thumbPhoto(t){
+  if (t.id in R.thumbs) return R.thumbs[t.id]; R.thumbs[t.id]=null;
+  try { const j=await wapi("commons.wikimedia.org", { action:"query", generator:"geosearch", ggscoord:t.head[0].toFixed(5)+"|"+t.head[1].toFixed(5), ggsradius:"1500", ggslimit:"12", ggsnamespace:"6", prop:"imageinfo", iiprop:"url|mime", iiurlwidth:"320" });
+    const pgs=Object.values(j.query?.pages||{}).sort((a,b)=>(a.index||0)-(b.index||0));
+    for (const pg of pgs){ const ii=pg.imageinfo?.[0]; if (!ii || !/^image\/(jpeg|webp)$/.test(ii.mime) || /\b(map|diagram|logo|chart|locator|sign)\b/i.test(pg.title)) continue; R.thumbs[t.id]=ii.thumburl; break; } } catch(e){}
+  return R.thumbs[t.id]; }
+function pvTrail(id){ return R.byId[id] || savedTrail(id); }
+function previewTrail(id, list){
+  const t=pvTrail(id); if (!t || !t.segs) return openTrail(id);
+  if (list) R.pvList=list; else if (!R.pvList || !R.pvList.includes(id)) R.pvList=visibleTrails().map(x=>x.id);
+  R.pv=id;
+  if (matchMedia("(max-width:899px)").matches) mapFull(true);
+  $("#areaBtn").classList.remove("show");
+  selLayer.clearLayers();
+  L.polyline(t.segs, { color:"#fff", weight:9, opacity:.95, interactive:false }).addTo(selLayer);
+  L.polyline(t.segs, { color:css(DCOL[difficulty(t)]), weight:6, interactive:false }).addTo(selLayer);
+  L.marker(t.head, { icon:L.divIcon({ className:"headpin", iconSize:[22,22], iconAnchor:[11,22] }), interactive:false }).addTo(selLayer);
+  const box=$("#pv"); box.hidden=false; document.body.classList.add("pving");
+  drawPreview(t);
+  const bb=t.bbox, ph=box.offsetHeight+30;
+  setTimeout(()=>map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]], { paddingTopLeft:[30,90], paddingBottomRight:[30,ph], maxZoom:15 }), matchMedia("(max-width:899px)").matches?280:0);
+  if (!t.elev && !S.elev[t.id]) computeElev(t, 60).then(()=>{ if (R.pv===t.id) drawPreview(t); }).catch(()=>{});
+  thumbPhoto(t).then(u=>{ if (u && R.pv===t.id){ const im=$("#pv .pvphoto"); if (im){ im.style.backgroundImage=`url("${u}")`; im.classList.add("on"); } } });
+}
+function drawPreview(t){
+  const d=difficulty(t), a=atFor(t), L2=t.loop?t.len:t.len*2, i=R.pvList.indexOf(t.id), n=R.pvList.length;
+  const climb=t.elev?fmtEl(t.elev.gain+(t.loop?0:t.elev.loss)):null, away=R.center?fd(meLast||R.center,t.head):null;
+  $("#pv").style.setProperty("--pvh", "0px");
+  $("#pv").innerHTML=`<button class="pvx" aria-label="Close preview">&times;</button>
+  <div class="pvmain" role="button" tabindex="0" aria-label="Open ${esc(t.name)} details">
+    <div class="pvthumb">${thumbMap(t, 96)}<div class="pvphoto${R.thumbs[t.id]?" on":""}" ${R.thumbs[t.id]?`style="background-image:url('${R.thumbs[t.id]}')"`:""}></div></div>
+    <div class="pvtext"><div class="pvname">${esc(t.name)}</div>
+      <div class="meta"><span class="chip ${d}">${d}</span>${a?`<span class="chip at">AllTrails ★ ${a.r.toFixed(1)}</span>`:""}${popChip(a)}</div>
+      <div class="pvstats"><span>${fmtLen(L2)} ${t.loop?"loop":"round trip"}</span>${climb?`<span>&#8599; ${climb}</span>`:""}<span>~${fmtDur(estHours(t))}</span>${away!=null?`<span>${fmtLen(away)} away</span>`:""}</div>
+    </div></div>
+  <div class="pvnav"><button class="btn pvprev" ${i<=0?"disabled":""} aria-label="Previous trail">&#8249;</button><span class="note">${i>=0?`${i+1} of ${n}`:""}</span><button class="btn primary pvgo">Details</button><span class="note"></span><button class="btn pvnext" ${i<0||i>=n-1?"disabled":""} aria-label="Next trail">&#8250;</button></div>`;
+  const box=$("#pv"), go=()=>{ R.pvBack=t.id; openTrail(t.id); };
+  box.querySelector(".pvx").onclick=closePreview;
+  box.querySelector(".pvmain").onclick=go; box.querySelector(".pvgo").onclick=go;
+  box.querySelector(".pvmain").onkeydown=e=>{ if (e.key==="Enter") go(); };
+  box.querySelector(".pvprev").onclick=()=>pvStep(-1); box.querySelector(".pvnext").onclick=()=>pvStep(1);
+  document.body.style.setProperty("--pvh", box.offsetHeight+"px");
+}
+function pvStep(k){ const i=R.pvList.indexOf(R.pv), j=i+k; if (j>=0 && j<R.pvList.length) previewTrail(R.pvList[j]); }
+function hidePreview(){ R.pv=null; $("#pv").hidden=true; document.body.classList.remove("pving"); }
+function closePreview(){ if (!R.pv) return; hidePreview(); if (!R.sel) selLayer.clearLayers(); }
+map.on("click", ()=>{ if (R.pv) closePreview(); });
+(()=>{ let x0=null, y0=0; const box=$("#pv");
+  box.addEventListener("touchstart", e=>{ x0=e.touches[0].clientX; y0=e.touches[0].clientY; }, { passive:true });
+  box.addEventListener("touchend", e=>{ if (x0==null) return; const dx=e.changedTouches[0].clientX-x0, dy=e.changedTouches[0].clientY-y0; x0=null;
+    if (Math.abs(dx)>50 && Math.abs(dx)>Math.abs(dy)*1.5){ e.preventDefault(); pvStep(dx<0?1:-1); } }); })();
 
 /* ================= navigate ================= */
 const COMPASS=["north","northeast","east","southeast","south","southwest","west","northwest"];
