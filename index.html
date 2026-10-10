@@ -1142,6 +1142,7 @@ function highlight(id, on){ const t=R.byId[id]; if (t?._line) t._line.setStyle({
 
 /* ================= searching ================= */
 async function searchArea(){
+  if (navigator.onLine===false){ toast("You're offline. Trails you saved, and their maps, are under Saved."); return; }
   if (map.getZoom()<10){ toast("Zoom in a bit more to search for trails."); return; }
   $("#areaBtn").classList.remove("show");
   const b=map.getBounds(); const c=b.getCenter();
@@ -1619,7 +1620,7 @@ out center;`;
 }
 function highlightsHtml(t){
   const h=R.hl[t.id], tg=t.tags||{}, chips=[];
-  if (Array.isArray(h)) [...new Map(h.map(x=>[x.k,x])).values()].forEach(x=>chips.push(`${x.ico} ${x.label}${h.filter(y=>y.k===x.k).length>1?"s":""}`));
+  if (Array.isArray(h)) [...new Map(h.map(x=>[x.k,x])).values()].forEach(x=>chips.push(`${x.ico} ${x.label}${h.filter(y=>y.k===x.k).length>1&&!/s$/.test(x.label)?"s":""}`));
   if (/^(yes|leashed)$/.test(tg.dog||"")) chips.push(tg.dog==="leashed"?"🐕 Dogs on leash":"🐕 Dogs allowed"); else if (tg.dog==="no") chips.push("🚫 No dogs");
   if (t.kind==="bike") chips.push("🚵 Bike trail"); else if (t.kind==="shared") chips.push("🚲 Bikes allowed");
   if (t.loop) chips.push("🔁 Loop");
@@ -1667,7 +1668,7 @@ async function loadMedia(t){
     if (pg && pg.extract){ out.desc=pg.extract; out.title=pg.title; out.url=pg.fullurl; if (pg.thumbnail) out.lead={ thumb:pg.thumbnail.source, page:pg.fullurl, credit:"Wikipedia" }; }
   }
   // 2. Geotagged photos on Wikimedia Commons near the trailhead, middle and high point
-  const probes=[t.head, pts[Math.floor(pts.length/2)], hi, pts[pts.length-1]].filter(Boolean), seen=new Set();
+  const probes=[t.head, pts[Math.floor(pts.length/2)], hi, pts[pts.length-1]].filter(Boolean), seen=new Set(), by={};
   for (const c of probes){
     if (out.photos.length>=12) break;
     const j=await wapi("commons.wikimedia.org", { action:"query", generator:"geosearch", ggscoord:c[0].toFixed(5)+"|"+c[1].toFixed(5), ggsradius:"500", ggslimit:"20", ggsnamespace:"6", prop:"imageinfo", iiprop:"url|mime|extmetadata", iiurlwidth:"480" });
@@ -1675,7 +1676,8 @@ async function loadMedia(t){
       const ii=pg.imageinfo?.[0]; if (!ii || !/^image\/(jpeg|png|webp)$/.test(ii.mime) || seen.has(pg.title)) continue;
       if (/\b(map|diagram|logo|chart|locator)\b/i.test(pg.title)) continue;
       seen.add(pg.title);
-      const m=ii.extmetadata||{};
+      const m=ii.extmetadata||{}, who=strip(m.Artist?.value)||"?";
+      if ((by[who]=(by[who]||0)+1)>3 || out.photos.length>=12) continue; // mix photographers, cap the gallery
       out.photos.push({ thumb:ii.thumburl||ii.url, page:ii.descriptionurl, credit:[strip(m.Artist?.value), m.LicenseShortName?.value].filter(Boolean).join(", ").slice(0,80), title:pg.title.replace(/^File:|\.\w+$/g,"") });
     }
   }
@@ -1694,7 +1696,7 @@ function mediaHtml(t){
 /* ================= offline maps for saved trails ================= */
 const TILE_CACHE="sb-tiles";
 function tileList(t, tpl, subs){
-  const [s,w,n,e]=t.bbox, ps=(n-s)*0.15+0.002, pw=(e-w)*0.15+0.002, urls=[];
+  const [s,w,n,e]=t.bbox, ps=(n-s)*0.15+0.006, pw=(e-w)*0.15+0.009, urls=[];
   const X=(lng,z)=>Math.floor((lng+180)/360*2**z), Y=(lat,z)=>{ const r=lat*RAD; return Math.floor((1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*2**z); };
   for (let z=11; z<=16; z++){
     const x0=X(w-pw,z), x1=X(e+pw,z), y0=Y(n+ps,z), y1=Y(s-ps,z);
