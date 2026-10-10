@@ -14,6 +14,8 @@ await pg.screenshot({ path: "shots/1-load.png" });
 const tiles = await pg.evaluate(() => [...document.querySelectorAll(".leaflet-tile")].map(t => t.complete && t.naturalWidth > 0).filter(Boolean).length);
 console.log("TILES loaded:", tiles);
 await step("search place", async () => { await pg.fill("#q", "North Bend"); await pg.press("#q", "Enter");
+  await pg.waitForTimeout(4000);
+  console.log("TOAST", await pg.innerText("#toast"), "SUGGEST", await pg.evaluate(() => document.querySelector("#suggest").className + " " + document.querySelectorAll("#suggest button").length));
   await pg.waitForSelector("#suggest.show button", { timeout: 10000 });
   console.log("CHOICES", (await pg.innerText("#suggest")).replace(/\n/g, " | "));
   await pg.click("#suggest button:has-text('Washington')"); });
