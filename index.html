@@ -832,6 +832,9 @@ textarea.txt{min-height:70px;resize:vertical}
 .hours td.hc span{display:block;font-size:.8rem}.hours td.hc b{display:block}.hours td.hc small{display:block;color:var(--muted);font-size:.68rem}
 .hours td.past{opacity:.4}
 .wxstar{color:#2e8540;font-size:.8rem;margin-right:2px;float:left}
+.pvslot{margin:10px 0 4px}
+.pvmap{height:190px;border-radius:12px;overflow:hidden;border:1px solid var(--line);cursor:pointer}
+.hlpin.sm{font-size:11px;line-height:18px}
 .wxbest{margin:0 0 6px;font-size:.9rem}
 .days{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:8px}
 .day{flex:0 0 auto;min-width:52px;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:6px 4px;display:flex;flex-direction:column;align-items:center;gap:1px;font-size:.78rem;color:var(--ink)}
@@ -1348,7 +1351,7 @@ async function openTrail(id){
   $("#areaBtn").classList.remove("show");
   loadExtras(t);
 }
-function closeTrail(silent){ R.sel=null; selLayer.clearLayers(); if (cursor){ map.removeLayer(cursor); cursor=null; } if (!silent) render(); }
+function closeTrail(silent){ R.sel=null; R._detailId=null; selLayer.clearLayers(); if (cursor){ map.removeLayer(cursor); cursor=null; } if (!silent) render(); }
 /* Elevation along the trail from the trailhead: ~60 m samples, smoothed, with a 4 m hysteresis for gain/loss. */
 async function computeElev(t, maxN=100){
       const path=orderPath(t.segs, t.head); const cum=[0];
@@ -1386,6 +1389,7 @@ function renderDetail(b){
   let h=`<button class="back" id="back">&#8592; ${R.tab==="explore"?"All trails":R.tab==="saved"?"Saved":"Back"}</button>
   <h2 class="dname">${esc(t.name)}</h2>
   <div class="row"><span class="chip ${d}">${d}</span><span class="chip plain">${t.loop?"Loop":"Out &amp; back"}</span>${t.kind==="bike"?'<span class="chip plain">Bike trail</span>':t.kind==="shared"?'<span class="chip plain">Hike + bike</span>':""}${t.partial?`<span class="chip plain" title="Part of this route is outside the searched area">Section shown</span>`:""}${t.tags?.network&&/^(n|i)wn$/.test(t.tags.network)?`<span class="chip plain">Long-distance</span>`:""}</div>
+  ${t.segs?'<div id="pvSlot" class="pvslot"></div>':""}
   <div class="stats">
     <div class="stat"><div class="v">${lv} <small>${lu}</small></div><div class="k">${t.loop?"Loop length":"Round trip"}</div></div>
     <div class="stat"><div class="v">${ev?`${ev[0]} <small>${ev[1]}</small>`:t.elevErr?"—":'<span class="spin"></span>'}</div><div class="k">Elev. gain</div></div>
@@ -1441,7 +1445,8 @@ function renderDetail(b){
   const off=S.saved[t.id]?.offline;
   h+=`<div class="box"><div class="lab" style="margin-top:0">Offline</div>${S.saved[t.id]?(off?`<p class="note" style="margin:0 0 8px">Map saved for offline use (${off.tiles} tiles, ${esc(off.style)}) on ${new Date(off.at).toLocaleDateString()}. The trail, profile and last forecast are saved too.</p><button class="btn" id="offBtn">Update offline map</button>`:`<p class="note" style="margin:0 0 8px">Download this trail's map so it works with no signal. Uses the current map style (${esc(R.base)}).</p><button class="btn primary" id="offBtn">Download for offline</button>`):`<p class="note" style="margin:0">Save this trail to a list to download its map for offline use.</p>`}</div>`;
   h+=`<div class="row" style="margin-top:14px"><button class="btn" id="gpx"${t.segs?"":" disabled"}>Download GPX</button><button class="btn" id="shareOne">Share</button></div>`;
-  b.innerHTML=h; b.scrollTop=0;
+  const keep=b.scrollTop; b.innerHTML=h; b.scrollTop=R._detailId===t.id?keep:0; R._detailId=t.id;
+  attachPreview(t);
 
   $("#back").onclick=()=>{ closeTrail(); sheet("half"); };
   $("#copyC").onclick=()=>copy(t.head[0].toFixed(6)+", "+t.head[1].toFixed(6), "Coordinates copied");
@@ -1790,6 +1795,29 @@ async function saveOffline(t){
 }
 async function offlineStats(){ try { const c=await caches.open(TILE_CACHE); const n=(await c.keys()).length; const est=await navigator.storage?.estimate?.(); return { n, mb:est?Math.round(est.usage/1e6):null }; } catch(e){ return null; } }
 if ("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
+
+/* ================= trail preview map (top of the trail page) ================= */
+let PV=null; // { id, el, map, hlCount }
+function attachPreview(t){
+  const slot=$("#pvSlot"); if (!slot) return;
+  if (!PV || PV.id!==t.id){
+    if (PV) PV.map.remove();
+    const el=document.createElement("div"); el.className="pvmap";
+    const m=L.map(el, { zoomControl:false, attributionControl:false, dragging:false, touchZoom:false, scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, keyboard:false, tap:false });
+    const bl=base[R.base]||base["Esri Topo"];
+    L.tileLayer(bl._url, Object.assign({}, bl.options, { maxNativeZoom:navigator.onLine===false?17:bl.options.maxNativeZoom })).addTo(m);
+    L.polyline(t.segs, { color:"#fff", weight:7, opacity:.9 }).addTo(m);
+    L.polyline(t.segs, { color:css(DCOL[difficulty(t)]), weight:4 }).addTo(m);
+    L.marker(t.head, { icon:L.divIcon({ className:"headpin", iconSize:[18,18], iconAnchor:[9,18] }) }).addTo(m);
+    PV={ id:t.id, el, map:m, hl:L.layerGroup().addTo(m), hlCount:-1 };
+    el.onclick=()=>{ sheet("peek"); toast("Showing the trail on the map. Drag the panel up to go back."); };
+  }
+  slot.appendChild(PV.el);
+  const h=Array.isArray(R.hl[t.id])?R.hl[t.id]:[];
+  if (PV.hlCount!==h.length){ PV.hl.clearLayers(); PV.hlCount=h.length;
+    h.forEach(x=>L.marker(x.ll,{ icon:L.divIcon({ className:"hlpin sm", html:x.ico, iconSize:[18,18], iconAnchor:[9,9] }), interactive:false }).addTo(PV.hl)); }
+  requestAnimationFrame(()=>{ PV.map.invalidateSize(); const bb=t.bbox; PV.map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]], { padding:[16,16], maxZoom:16, animate:false }); });
+}
 
 /* ================= hourly weather board (Saved tab) ================= */
 /* One Open-Meteo request covers every saved trailhead. Each daylight hour gets a 0-100 hiking score from rain chance,
