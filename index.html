@@ -982,14 +982,14 @@ async function geocode(q, n=6){
 }
 async function getElev(pts){
   const u="https://api.open-meteo.com/v1/elevation?latitude="+pts.map(p=>p[0].toFixed(5)).join(",")+"&longitude="+pts.map(p=>p[1].toFixed(5)).join(",");
-  const r=await fetch(u); if (!r.ok) throw new Error("elevation "+r.status);
+  const r=await fetch(u); if (!r.ok){ const e=new Error("elevation "+r.status); e.status=r.status; throw e; }
   const j=await r.json(); if (!Array.isArray(j.elevation)) throw new Error("no elevation"); return j.elevation;
 }
 async function getWeather(p){
   const u="https://api.open-meteo.com/v1/forecast?latitude="+p[0].toFixed(4)+"&longitude="+p[1].toFixed(4)+
     "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,sunrise,sunset"+
     (imp()?"&temperature_unit=fahrenheit&wind_speed_unit=mph":"&wind_speed_unit=kmh")+"&timezone=auto&forecast_days=7";
-  const r=await fetch(u); if (!r.ok) throw new Error("weather "+r.status);
+  let r=await fetch(u); if (r.status===429){ await sleep(2500); r=await fetch(u); } if (!r.ok) throw new Error("weather "+r.status);
   const d=(await r.json()).daily; if (!d||!d.time) throw new Error("no forecast");
   return d.time.map((date,i)=>({ date, code:d.weather_code[i], hi:Math.round(d.temperature_2m_max[i]), lo:Math.round(d.temperature_2m_min[i]),
     pp:d.precipitation_probability_max[i], wind:Math.round(d.wind_speed_10m_max[i]), rise:d.sunrise?.[i], set:d.sunset?.[i] }));
@@ -1132,10 +1132,11 @@ out center;`;
 let prefetchRun=0;
 async function prefetchElev(){ // fill in climb for the nearest trails, one request at a time, so cards show real difficulty
   const run=++prefetchRun;
-  for (const t of visibleTrails().slice(0,30)){
-    if (run!==prefetchRun) return;
+  for (const t of visibleTrails().slice(0,15)){
+    if (run!==prefetchRun || R.sel) return; // an open trail gets the network to itself
     if (t.elev || t.elevErr) continue;
-    try { await computeElev(t); } catch(e){ t.elevErr=true; continue; }
+    try { await computeElev(t, 30); } catch(e){ if (e.status===429) return; t.elevErr=true; continue; } // Open-Meteo's free limit: stop, don't hammer
+    await sleep(600);
     if (run===prefetchRun && R.tab==="explore" && !R.sel){ const y=$("#body").scrollTop; render(); $("#body").scrollTop=y; }
   }
 }
@@ -1250,10 +1251,10 @@ async function openTrail(id){
 }
 function closeTrail(silent){ R.sel=null; selLayer.clearLayers(); if (cursor){ map.removeLayer(cursor); cursor=null; } if (!silent) render(); }
 /* Elevation along the trail from the trailhead: ~60 m samples, smoothed, with a 4 m hysteresis for gain/loss. */
-async function computeElev(t){
+async function computeElev(t, maxN=100){
       const path=orderPath(t.segs, t.head); const cum=[0];
       for (let i=1;i<path.length;i++){ const d=hav(path[i-1],path[i]); cum.push(cum[i-1]+(d>200?0:d)); } // ignore jumps between disconnected pieces
-      const total=cum[cum.length-1]||1, N=Math.min(100, Math.max(5, Math.round(total/60)+1)), samp=[], at=[];
+      const total=cum[cum.length-1]||1, N=Math.min(maxN, Math.max(5, Math.round(total/60)+1)), samp=[], at=[];
       let j=0; for (let k=0;k<N;k++){ const target=total*k/(N-1); while (j<cum.length-1 && cum[j+1]<target) j++;
         const seg=cum[j+1]-cum[j]||1, f=Math.min(1,Math.max(0,(target-cum[j])/seg)), a=path[j], b=path[Math.min(j+1,path.length-1)];
         samp.push([a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f]); at.push(target); }
