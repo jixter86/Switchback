@@ -1316,7 +1316,7 @@ async function loadExtras(t){
   const hk=t.head.join(",");
   if (!R.wx[hk]) jobs.push((async()=>{ try { R.wx[hk]=await getWeather(t.head); if (S.saved[t.id]){ S.saved[t.id].wx={ at:Date.now(), data:R.wx[hk] }; save(); } }
     catch(e){ const c=S.saved[t.id]?.wx; R.wx[hk]=c ? c.data : "err"; if (c) R.wxOld=c.at; } })());
-  if (t.segs && R.hl[t.id]==null) jobs.push(loadHighlights(t).then(x=>{ R.hl[t.id]=x; if (S.saved[t.id]){ S.saved[t.id].hl=x; save(); } drawHighlights(t); }).catch(()=>{ R.hl[t.id]=S.saved[t.id]?.hl||[]; }));
+  if (t.segs && (R.hl[t.id]==null || R.hl[t.id]==="err")){ R.hl[t.id]=null; jobs.push(loadHighlights(t).then(x=>{ R.hl[t.id]=x; if (S.saved[t.id]){ S.saved[t.id].hl=x; save(); } drawHighlights(t); }).catch(()=>{ R.hl[t.id]=S.saved[t.id]?.hl||"err"; })); }
   if (t.segs && R.media[t.id]==null) jobs.push(loadMedia(t).then(x=>{ R.media[t.id]=x; }).catch(()=>{ R.media[t.id]="err"; }));
   if (!t.segs){ if (R.hl[t.id]==null) R.hl[t.id]=S.saved[t.id]?.hl||[]; if (R.media[t.id]==null) R.media[t.id]="err"; }
   const dk=S.home ? S.home.lat+","+S.home.lng+">"+hk : null;
@@ -1626,8 +1626,9 @@ function highlightsHtml(t){
   if (t.loop) chips.push("🔁 Loop");
   let o=`<div class="lab">Highlights</div>`;
   if (h==null) o+=`<p class="note"><span class="spin"></span> Looking for waterfalls, viewpoints and more…</p>`;
+  if (h==="err") o+=`<p class="note">The map server is busy, so highlights didn't load. Open the trail again to retry.</p>`;
   if (chips.length) o+=`<div class="hl">${chips.map(c=>`<span class="hlchip">${esc(c)}</span>`).join("")}</div>`;
-  else if (h!=null) o+=`<p class="note">Nothing notable is mapped along this trail.</p>`;
+  else if (Array.isArray(h)) o+=`<p class="note">Nothing notable is mapped along this trail.</p>`;
   const named=Array.isArray(h)?h.filter(x=>x.name||x.k==="peak"||x.k==="waterfall"||x.k==="view"):[];
   if (named.length) o+=`<ul class="hllist">${named.slice(0,10).map(x=>`<li>${x.ico} ${esc(x.name||x.label)}${x.ele&&x.k==="peak"?` (${fmtEl(+x.ele)})`:""} <span class="note">at ${fmtLen(x.at)}</span></li>`).join("")}</ul>`;
   return o;
