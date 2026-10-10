@@ -815,6 +815,23 @@ textarea.txt{min-height:70px;resize:vertical}
 .gallery span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
 
 /* saved + record */
+.wxgrid{overflow-x:auto;margin:0 -4px 6px;padding:0 4px}
+.wxgrid table{border-collapse:separate;border-spacing:2px;font-size:.78rem}
+.wxgrid th{font-weight:600;color:var(--muted);text-align:center;white-space:nowrap}
+.wxgrid tbody th{position:sticky;left:0;z-index:1;background:var(--panel);text-align:left;max-width:84px;min-width:84px;padding-right:3px}
+.wxnm{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;max-width:84px;overflow:hidden;font-size:.74rem;line-height:1.15;font-weight:700;margin:0}
+.wxgrid tbody th small{display:block;font-weight:400;color:var(--muted);font-size:.7rem}
+.dayh{background:none;border:1px solid transparent;border-radius:8px;padding:2px 4px;font:inherit;font-weight:700;color:var(--ink);display:flex;flex-direction:column;align-items:center;min-width:34px}
+.dayh small{font-weight:400;color:var(--muted)}
+.dayh.on{background:var(--brand);color:#fff}.dayh.on small{color:#fff}
+.wxc{width:34px;height:42px;border-radius:9px;border:2px solid transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;background:color-mix(in srgb,var(--wc) 22%,var(--panel));color:var(--ink);font:inherit;padding:0}
+.wxc b{font-size:.8rem}.wxc span{font-size:.85rem;line-height:1}
+.wxc.on{outline:2px solid var(--brand);outline-offset:1px}
+.wxc.best{border-color:var(--wc)}
+.hours td.hc{min-width:38px;text-align:center;border-radius:7px;padding:3px 0;background:color-mix(in srgb,var(--wc) 22%,var(--panel));line-height:1.15}
+.hours td.hc span{display:block;font-size:.8rem}.hours td.hc b{display:block}.hours td.hc small{display:block;color:var(--muted);font-size:.68rem}
+.hours td.past{opacity:.4}
+.wxbest{margin:0 0 6px;font-size:.9rem}
 .days{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:8px}
 .day{flex:0 0 auto;min-width:52px;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:6px 4px;display:flex;flex-direction:column;align-items:center;gap:1px;font-size:.78rem;color:var(--ink)}
 .day.on{border-color:var(--brand);background:var(--brand);color:#fff}
@@ -1820,21 +1837,30 @@ function weatherBoard(){
   if (!withWx.length) return o+`<p class="note">${hwxBusy?'<span class="spin"></span> Getting hourly forecasts…':esc(R.hwxErr||"No forecast yet.")}</p>`;
   const dates=[...new Set(withWx[0].hwx.t.map(t=>t.slice(0,10)))].slice(0,7), now=new Date();
   if (!R.wxDay || !dates.includes(R.wxDay)) R.wxDay=dates[now.getHours()>=18&&dates[1]?1:0];
-  o+=`<div class="days">${dates.map((d,i)=>{ const dt=new Date(d+"T12:00");
-    const best=Math.max(...withWx.map(t=>dayScore(t.hwx,d)?.score??0));
-    return `<button class="day${d===R.wxDay?" on":""}" data-day="${d}"><b>${i===0?"Today":dt.toLocaleDateString(undefined,{ weekday:"short" })}</b><span>${dt.getDate()}</span><i class="dot ${scoreCls(best)}"></i></button>`; }).join("")}</div>`;
   if (R.hwxErr) o+=`<p class="note">${esc(R.hwxErr)}</p>`;
-  const rows=withWx.map(t=>({ t, d:dayScore(t.hwx,R.wxDay) })).filter(r=>r.d).sort((a,b)=>b.d.score-a.d.score);
+  const dayLabel=(d,i)=>i===0?"Today":new Date(d+"T12:00").toLocaleDateString(undefined,{ weekday:"short" });
+  const sc={}; withWx.forEach(t=>{ sc[t.id]={}; dates.forEach(d=>sc[t.id][d]=dayScore(t.hwx,d)); });
+  const rows=withWx.slice().sort((a,b)=>(sc[b.id][R.wxDay]?.score??-1)-(sc[a.id][R.wxDay]?.score??-1));
+  const bestOf=d=>Math.max(...withWx.map(t=>sc[t.id][d]?.score??-1));
+  const nm=t=>`<button class="linkish wxnm" data-open="${esc(t.id)}" title="${esc(t.name)}">${esc(t.name)}</button>`;
+  // 1. every trail x every day: the overall rating, best per day outlined
+  o+=`<p class="note" style="margin:0 0 6px">Each day's rating for every saved trail. Tap a day for its hours.</p><div class="wxgrid"><table><thead><tr><th></th>${dates.map((d,i)=>`<th><button class="dayh${d===R.wxDay?" on":""}" data-day="${d}">${dayLabel(d,i)}<small>${+d.slice(8)}</small></button></th>`).join("")}</tr></thead><tbody>`+
+    rows.map(t=>`<tr><th>${nm(t)}</th>${dates.map(d=>{ const x=sc[t.id][d]; if (!x) return "<td></td>";
+      const best=x.score===bestOf(d)&&withWx.length>1, mid=t.hwx.t.indexOf(d+"T13:00");
+      return `<td><button class="wxc ${scoreCls(x.score)}${best?" best":""}${d===R.wxDay?" on":""}" data-day="${d}" title="${scoreWord(x.score)}"><span>${mid>=0?(WX[t.hwx.c[mid]]||["·"])[0]:""}</span><b>${x.score}</b></button></td>`; }).join("")}</tr>`).join("")+`</tbody></table></div>`;
+  // 2. the chosen day, hour by hour, all trails in one grid
+  const di=dates.indexOf(R.wxDay), top=rows[0], tb=sc[top.id][R.wxDay];
+  o+=`<div class="lab">${new Date(R.wxDay+"T12:00").toLocaleDateString(undefined,{ weekday:"long", month:"short", day:"numeric" })}</div>`;
+  if (tb && withWx.length>1) o+=`<p class="wxbest">Best: <b>${esc(top.name)}</b>, ${scoreWord(tb.score).toLowerCase()} (${tb.score}), best ${hr12(tb.from)}–${hr12(tb.from+3)}</p>`;
+  const hours=[]; for (let h=6;h<=20;h++) hours.push(h);
   const today=R.wxDay===new Date().toLocaleDateString("en-CA");
-  rows.forEach((r,n)=>{ const x=r.t.hwx, d=r.d, idx=dayOf(x,R.wxDay).filter(i=>{ const h=+x.t[i].slice(11,13); return h>=6&&h<=20; });
-    o+=`<div class="wxrow${n===0&&rows.length>1?" best":""}">
-      <div class="wxtop"><button class="linkish" data-open="${esc(r.t.id)}">${esc(r.t.name)}</button>${n===0&&rows.length>1?'<span class="chip s-great">Best</span>':""}<span class="chip ${scoreCls(d.score)}">${scoreWord(d.score)} ${d.score}</span></div>
-      <div class="note">${d.hi}°/${d.lo}° · rain up to ${d.pp}% · wind to ${d.w} ${imp()?"mph":"km/h"} · best ${hr12(d.from)}–${hr12(d.from+3)}</div>
-      <div class="hstrip">${idx.map(i=>{ const h=+x.t[i].slice(11,13), s=hourScore(x,i), past=today&&h<now.getHours();
-        return `<div class="hcell ${scoreCls(s)}${past?" past":""}"><span>${hr12(h).replace(" ","").toLowerCase()}</span><span>${(WX[x.c[i]]||["·"])[0]}</span><b>${x.tp[i]}°</b><span>${x.pp[i]??0}%</span></div>`; }).join("")}</div>
-    </div>`; });
+  o+=`<div class="wxgrid"><table class="hours"><thead><tr><th></th>${hours.map(h=>`<th>${hr12(h).replace(" ","").toLowerCase()}</th>`).join("")}</tr></thead><tbody>`+
+    rows.map(t=>{ const x=t.hwx, d=sc[t.id][R.wxDay];
+      return `<tr><th>${nm(t)}<small>${d?`${d.hi}°/${d.lo}° · ${d.pp}% rain`:""}</small></th>${hours.map(h=>{ const i=x.t.indexOf(`${R.wxDay}T${String(h).padStart(2,"0")}:00`);
+        if (i<0) return "<td></td>"; const s=hourScore(x,i), past=today&&h<now.getHours();
+        return `<td class="hc ${scoreCls(s)}${past?" past":""}"><span>${(WX[x.c[i]]||["·"])[0]}</span><b>${x.tp[i]}°</b><small>${x.pp[i]??0}%</small></td>`; }).join("")}</tr>`; }).join("")+`</tbody></table></div>`;
   const upd=Math.min(...withWx.map(t=>t.hwx.at));
-  o+=`<p class="note">Forecast from Open-Meteo, updated ${new Date(upd).toLocaleTimeString([], { hour:"numeric", minute:"2-digit" })}. Scores favor dry, mild, calm daylight hours.</p>`;
+  o+=`<p class="note">Ratings 0 to 100 favor dry, mild (${imp()?"50–75°F":"10–24°C"}), calm daylight hours. Forecast from Open-Meteo, updated ${new Date(upd).toLocaleTimeString([], { hour:"numeric", minute:"2-digit" })}.</p>`;
   return o;
 }
 function bindWeatherBoard(b){
