@@ -1,0 +1,23 @@
+// Drives the live site in Chromium (mobile size) and prints what happened.
+import { chromium } from "playwright";
+const url = process.env.SITE || "https://jixter86.github.io/switchback/";
+const b = await chromium.launch();
+const pg = await b.newPage({ viewport: { width: 390, height: 844 }, geolocation: { latitude: 47.4957, longitude: -121.7868 }, permissions: ["geolocation"] });
+pg.on("console", m => console.log("CONSOLE", m.type(), m.text()));
+pg.on("pageerror", e => console.log("PAGEERROR", e.message));
+pg.on("requestfailed", r => console.log("REQFAILED", r.url().slice(0, 140), r.failure()?.errorText));
+pg.on("response", r => { if (r.status() >= 400) console.log("HTTP", r.status(), r.url().slice(0, 140)); });
+const step = async (name, fn) => { try { await fn(); console.log("OK", name); } catch (e) { console.log("FAIL", name, e.message.split("\n")[0]); } };
+await step("load", () => pg.goto(url, { waitUntil: "load", timeout: 30000 }));
+await pg.waitForTimeout(3000);
+await pg.screenshot({ path: "shots/1-load.png" });
+const tiles = await pg.evaluate(() => [...document.querySelectorAll(".leaflet-tile")].map(t => t.complete && t.naturalWidth > 0).filter(Boolean).length);
+console.log("TILES loaded:", tiles);
+await step("search place", async () => { await pg.fill("#q", "North Bend"); await pg.press("#q", "Enter"); });
+await step("trail cards", () => pg.waitForSelector(".card", { timeout: 45000 }));
+console.log("BODY", (await pg.innerText("#body")).slice(0, 800).replace(/\n/g, " | "));
+await pg.screenshot({ path: "shots/2-list.png" });
+await step("open trail", async () => { await pg.click(".card >> nth=0"); await pg.waitForTimeout(8000); });
+console.log("DETAIL", (await pg.innerText("#body")).slice(0, 1200).replace(/\n/g, " | "));
+await pg.screenshot({ path: "shots/3-detail.png" });
+await b.close();

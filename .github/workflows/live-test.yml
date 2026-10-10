@@ -1,0 +1,20 @@
+name: live-test
+on:
+  push:
+    branches: [live-test]
+  workflow_dispatch:
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm i playwright@1.48.2 && npx playwright install --with-deps chromium
+      - name: Probe APIs directly
+        run: |
+          for u in "https://overpass-api.de/api/status" "https://geocoding-api.open-meteo.com/v1/search?name=North%20Bend&count=1" "https://api.open-meteo.com/v1/elevation?latitude=47.5&longitude=-121.7" "https://router.project-osrm.org/route/v1/driving/-122.2,47.6;-121.7,47.5?overview=false" "https://a.tile.opentopomap.org/12/659/1430.png"; do echo "$u -> $(curl -s -o /dev/null -w '%{http_code}' -m 20 "$u")"; done
+      - run: mkdir -p shots && node tests/live.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: shots, path: shots }
