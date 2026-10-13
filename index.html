@@ -1318,7 +1318,9 @@ let meMarker=null, meWatch=null, cursor=null;
 map.on("moveend", ()=>{
   S.view={ c:[+map.getCenter().lat.toFixed(5), +map.getCenter().lng.toFixed(5)], z:map.getZoom() }; saveSoon();
   if (R.flying){ R.flying=false; return; } // the preview's own camera move doesn't count
-  if (R.tab==="explore" && !R.nav && (!R.sel || document.body.classList.contains("mapfull"))) $("#areaBtn").classList.add("show");
+  if (R.tab!=="explore" || R.nav) return;
+  if (!R.sel) listRefresh();
+  if (!R.sel || document.body.classList.contains("mapfull")){ clearTimeout(R.autoT); R.autoT=setTimeout(autoSearch, 800); }
 });
 
 function drawTrails(){
@@ -1344,15 +1346,27 @@ function drawTrails(){
 function highlight(id, on){ const t=R.byId[id]; if (!t?._line) return; if (t._line.setRadius) t._line.setRadius(on?11:8); else t._line.setStyle({ weight:on?7:4, opacity:on?1:.85 }); }
 
 /* ================= searching ================= */
+/* Trails load by themselves as the map moves, like AllTrails. Every finished search box is remembered
+   (R.cov), so moving back over an area already searched only re-filters the list, with no new request.
+   Trails near the view are kept across searches; far-away ones are dropped. */
 let searchRun=0;
-async function searchArea(){
-  if (navigator.onLine===false){ toast("You're offline. Trails you saved, and their maps, are under Saved."); return; }
-  if (map.getZoom()<10){ toast("Zoom in a bit more to search for trails."); return; }
-  $("#areaBtn").classList.remove("show");
-  const b=map.getBounds(); const c=b.getCenter();
+function queryBox(){ // the view, trimmed to a size busy Overpass servers still answer
+  const b=map.getBounds(), c=b.getCenter(), maxH=0.22, maxW=0.3;
   let s=b.getSouth(), w=b.getWest(), n=b.getNorth(), e=b.getEast();
-  const maxH=0.22, maxW=0.3; // keep queries small so busy Overpass servers answer
   if (n-s>maxH){ s=c.lat-maxH/2; n=c.lat+maxH/2; } if (e-w>maxW){ w=c.lng-maxW/2; e=c.lng+maxW/2; }
+  return [s,w,n,e]; }
+const bbHits=(a,b)=>!(a[2]<b[0]||a[0]>b[2]||a[3]<b[1]||a[1]>b[3]);
+const bbHolds=(a,b)=>a[0]<=b[0]&&a[1]<=b[1]&&a[2]>=b[2]&&a[3]>=b[3];
+function autoSearch(){
+  if (R.tab!=="explore" || R.nav || navigator.onLine===false || map.getZoom()<10) return;
+  if (R.searching){ R.autoAgain=true; return; } // one request at a time; check again when it finishes
+  const q=queryBox(); if ((R.cov||[]).some(c=>bbHolds(c, q))) return;
+  searchArea(true); }
+async function searchArea(auto){
+  if (navigator.onLine===false){ if (auto!==true) toast("You're offline. Trails you saved, and their maps, are under Saved."); return; }
+  if (map.getZoom()<10){ if (auto!==true) toast("Zoom in a bit more to search for trails."); return; }
+  $("#areaBtn").classList.remove("show");
+  const [s,w,n,e]=queryBox(), c=map.getCenter();
   const bb=[s,w,n,e].map(x=>x.toFixed(5)).join(",");
   const gb=[s-(n-s)/4, w-(e-w)/4, n+(n-s)/4, e+(e-w)/4].map(x=>x.toFixed(5)).join(",");
   const q=`[out:json][timeout:25];
@@ -1365,19 +1379,46 @@ out;
 nwr["amenity"="parking"](${bb});
 out center;`;
   const run=++searchRun; // a newer search makes this one's late answer irrelevant
-  R.center=[c.lat,c.lng]; R.searching=true; R.searchErr=null; R.byId={};
-  R.lastBB=[s-(n-s)/4, w-(e-w)/4, n+(n-s)/4, e+(e-w)/4]; setTrails(mergeAT(R.lastBB, [])); render(); // AllTrails trails right away
+  R.center=[c.lat,c.lng]; R.searching=true; R.searchErr=null;
+  // Keep what's already loaded near here; drop searches and trails far from the view.
+  const v=map.getBounds(), dh=v.getNorth()-v.getSouth(), dw=v.getEast()-v.getWest();
+  const near=[v.getSouth()-2*dh, v.getWest()-2*dw, v.getNorth()+2*dh, v.getEast()+2*dw];
+  R.cov=(R.cov||[]).filter(x=>bbHolds(near, x)).slice(-12); // a kept box keeps all its trails, since they touch it
+  const kept=R.trails.filter(t=>!t.id.startsWith("at") && t.bbox && bbHits(t.bbox, near));
+  const area=()=>R.cov.concat([[s,w,n,e]]).reduce((a,x)=>[Math.min(a[0],x[0]),Math.min(a[1],x[1]),Math.max(a[2],x[2]),Math.max(a[3],x[3])]);
+  R.lastBB=area(); setTrails(mergeAT(R.lastBB, kept)); listRefresh(true); drawTrails(); // AllTrails trails right away
   try {
     const t=buildTrails(await overpass(q, ()=>{ const c=$(".count"); if (c) c.innerHTML='<span class="spin"></span> The trail server is slow, trying a backup server…'; }));
     if (run!==searchRun) return;
-    setTrails(mergeAT(R.lastBB, t));
+    const old=new Map(kept.map(x=>[x.id,x])), ids=new Set(t.map(x=>x.id));
+    const fresh=t.map(x=>{ const o=old.get(x.id); return o && Math.abs(o.len-x.len)<o.len*0.01 ? o : x; }); // same trail: keep its loaded climb
+    R.cov.push([s,w,n,e]); R.lastBB=area();
+    setTrails(mergeAT(R.lastBB, fresh.concat(kept.filter(x=>!ids.has(x.id)))));
   } catch(e){ if (run!==searchRun) return; R.searchErr=navigator.onLine===false ? "You're offline." : "The OpenStreetMap trail servers are overloaded right now. Wait a few seconds and tap Try again."; }
   R.searching=false; render(); prefetchElev();
-}
+  if (R.autoAgain){ R.autoAgain=false; autoSearch(); } }
+/* The part of the map the person can actually see: not under the bottom sheet (phones) or the side panel.
+   With the sheet pulled all the way up no map shows, so the last seen area is kept. */
+function seenBounds(){
+  const pr=$("#panel").getBoundingClientRect(), mr=map.getContainer().getBoundingClientRect();
+  let x0=0, y0=0, x1=mr.width, y1=mr.height;
+  if (pr.top>mr.top+40 && pr.top<mr.bottom) y1=pr.top-mr.top; // bottom sheet
+  else if (pr.left<=mr.left+5 && pr.right>mr.left && pr.right<mr.right) x0=pr.right-mr.left; // side panel over the map
+  const top=$(".top")?.getBoundingClientRect(); if (top && top.right>mr.left+10 && top.bottom>mr.top && top.bottom-mr.top<y1/2) y0=top.bottom-mr.top; // search bar
+  if (y1-y0<120 || x1-x0<120) return R.seen||map.getBounds(); // sheet pulled up over nearly all of the map
+  return R.seen=L.latLngBounds(map.containerPointToLatLng([x0,y1]), map.containerPointToLatLng([x1,y0])); }
+function onScreen(t, b){ if (!t.segs) return b.contains(t.head);
+  const [s,w,n,e]=t.bbox; if (n<b.getSouth()||s>b.getNorth()||e<b.getWest()||w>b.getEast()) return false;
+  return t.segs.some(seg=>seg.some(p=>b.contains(p))); }
+function listTrails(){ const b=seenBounds(); return visibleTrails().filter(t=>onScreen(t, b)); }
+/* Re-filter the list for the current view, but only redraw it when which trails show actually changed. */
+function listRefresh(force){ if (R.tab!=="explore" || R.sel) return;
+  const key=R.gen+"|"+listTrails().map(t=>t.id).join();
+  if (!force && key===R.listKey) return; R.listKey=key; renderSoon(force?0:150); }
 let prefetchRun=0;
 async function prefetchElev(){ // fill in climb for the nearest trails, one request at a time, so cards show real difficulty
   const run=++prefetchRun;
-  for (const t of visibleTrails().slice(0,15)){
+  for (const t of listTrails().slice(0,15)){
     if (run!==prefetchRun || R.sel) return; // an open trail gets the network to itself
     if (t.elev || t.elevErr) continue;
     try { await computeElev(t, 30); } catch(e){ if (e.status===429) return; t.elevErr=true; continue; } // Open-Meteo's free limit: stop, don't hammer
@@ -1533,8 +1574,8 @@ document.addEventListener("visibilitychange", ()=>{ if (document.visibilityState
 
 /* ================= panel ================= */
 const sizes=["peek","half","full"];
-$("#handle").onclick=()=>{ mapFull(false); const d=document.body.dataset; d.size=sizes[(sizes.indexOf(d.size)+1)%3]; };
-function sheet(size){ mapFull(false); if (matchMedia("(max-width:899px)").matches) document.body.dataset.size=size; }
+$("#handle").onclick=()=>{ mapFull(false); const d=document.body.dataset; d.size=sizes[(sizes.indexOf(d.size)+1)%3]; setTimeout(listRefresh, 350); };
+function sheet(size){ mapFull(false); if (matchMedia("(max-width:899px)").matches) document.body.dataset.size=size; setTimeout(listRefresh, 350); }
 var MAP_IC='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>',
   LIST_IC='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11M4 6h0M4 12h0M4 18h0"/></svg>';
 function mapFull(on){ const b=document.body, was=b.classList.contains("mapfull"); on=!!on;
@@ -1582,13 +1623,13 @@ function renderExplore(b){
   </div>`;
   if (R.searching && !R.trails.length) h+=`<p class="count"><span class="spin"></span> Looking for trails…</p>`;
   else if (R.searchErr && !R.trails.length) h+=`<div class="empty"><strong>Search failed</strong>${esc(R.searchErr)}<p><button class="btn" id="retry">Try again</button></p></div>`;
-  else if (!R.center) h+=`<div class="empty"><strong>Find a trail</strong>Search a town or park above, or pan the map and tap <em>Search trails in this area</em>.<p><button class="btn primary" id="nearMe">Trails near me</button></p></div>`;
-  else { const v=visibleTrails();
-    const nb=R.trails.filter(x=>x.kind==="bike").length;
+  else if (!R.center) h+=`<div class="empty"><strong>Find a trail</strong>Search a town or park above, or zoom the map into an area.<p><button class="btn primary" id="nearMe">Trails near me</button></p></div>`;
+  else { const v=listTrails(); R.listKey=R.gen+"|"+v.map(t=>t.id).join();
+    const sb=seenBounds(), nb=R.trails.filter(x=>x.kind==="bike" && onScreen(x, sb)).length;
     if (R.searching) h+=`<p class="count"><span class="spin"></span> AllTrails trails shown. Loading more from OpenStreetMap…</p>`;
     else if (R.searchErr) h+=`<p class="count">OpenStreetMap is busy, so only AllTrails trails are shown. <a href="#" id="retry">Try again</a></p>`;
-    h+=`<p class="count">${v.length} trail${v.length===1?"":"s"} in this area${f.act==="hike"&&nb?` · ${nb} bike trail${nb===1?"":"s"} hidden`:""}${mapFOn()?` · <a href="#" id="mfLink">map filters on</a>`:""}</p>`;
-    h+= v.length ? v.map(t=>card(t)).join("") : `<div class="empty"><strong>No trails here</strong>OpenStreetMap has no named trails in this view. Try zooming out or another area.</div>`;
+    h+=`<p class="count">${v.length} trail${v.length===1?"":"s"} on the map${map.getZoom()<10?" · zoom in to load more":""}${f.act==="hike"&&nb?` · ${nb} bike trail${nb===1?"":"s"} hidden`:""}${mapFOn()?` · <a href="#" id="mfLink">map filters on</a>`:""}</p>`;
+    h+= v.length ? v.map(t=>card(t)).join("") : `<div class="empty"><strong>No trails here</strong>${R.searching?"Still loading trails for this view.":"There are no named trails in this part of the map. Try zooming out or moving the map."}</div>`;
     const ao=atOnly(); if (ao.length) h+=`<div class="lab atlab">More on AllTrails (${ao.length})</div><p class="note" style="margin:0 0 8px">AllTrails routes with no matching trail on the map here. Tap one to find it on the map, then view and save it like any trail.</p>`+ao.map(atCard).join(""); }
     setTimeout(()=>bindAtCards(b),0);
   b.innerHTML=h;
@@ -1597,7 +1638,7 @@ function renderExplore(b){
   $("#fDiff").onchange=e=>{ f.diff=e.target.value; render(); };
   $("#fLen").onchange=e=>{ f.len=e.target.value; render(); };
   $("#fSort").onchange=e=>{ f.sort=e.target.value; render(); prefetchElev(); };
-  $("#retry")&&($("#retry").onclick=searchArea);
+  $("#retry")&&($("#retry").onclick=e=>{ e.preventDefault?.(); searchArea(); });
   $("#nearMe")&&($("#nearMe").onclick=()=>{ if (!navigator.geolocation) return toast("This browser can't share your location.");
     Device.getPosition().then(p=>flyTo([p.coords.latitude,p.coords.longitude]), ()=>toast("Location permission was denied.")); });
   bindCards(b);
@@ -2548,7 +2589,7 @@ addEventListener("online", offlineZoom); addEventListener("offline", offlineZoom
 /* ================= boot ================= */
 render(); recResume();
 if (location.hash.startsWith("#import=")){ const c=location.hash; history.replaceState(null,"",location.pathname+location.search); importCode(c); }
-else if (S.view && S.view.z>=11) searchArea();
+else if (S.view && S.view.z>=10) searchArea();
 
 // Page itself never scrolls; only the sheet body and map move.
 (function(){
