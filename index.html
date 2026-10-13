@@ -1026,7 +1026,9 @@ function load(){
   try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.lists) return Object.assign(structuredClone(DEF), s); } catch(e){}
   return structuredClone(DEF);
 }
-function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){ toast("Storage is full or blocked; changes may not stick."); } }
+let saveT; function saveSoon(){ clearTimeout(saveT); saveT=setTimeout(save, 800); }
+addEventListener("pagehide", ()=>save()); document.addEventListener("visibilitychange", ()=>{ if (document.visibilityState==="hidden") save(); });
+function save(){ clearTimeout(saveT); try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){ toast("Storage is full or blocked; changes may not stick."); } }
 
 const R = { tab:"explore", trails:[], byId:{}, sel:null, filt:{ act:"hike", diff:"", len:"", sort:"best" }, center:null,
   searching:false, searchErr:null, wx:{}, drive:{}, rec:null, layers:{}, hl:{}, media:{}, base:"Esri Topo", nav:null };
@@ -1034,7 +1036,7 @@ if (/^(hike|bike|all)$/.test(savedAct||"")) R.filt.act=savedAct;
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
-let toastT; function toast(t, ms){ const e=$("#toast"); e.textContent=t; e.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>e.classList.remove("show"), 3200); }
+let toastT; function toast(t, ms){ const e=$("#toast"); e.textContent=t; e.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>e.classList.remove("show"), ms||3200); }
 
 /* ================= geometry ================= */
 const RAD = Math.PI/180;
@@ -1253,7 +1255,7 @@ const trailLayer=L.layerGroup().addTo(map), selLayer=L.layerGroup().addTo(map), 
 let meMarker=null, meWatch=null, cursor=null;
 
 map.on("moveend", ()=>{
-  S.view={ c:[+map.getCenter().lat.toFixed(5), +map.getCenter().lng.toFixed(5)], z:map.getZoom() }; save();
+  S.view={ c:[+map.getCenter().lat.toFixed(5), +map.getCenter().lng.toFixed(5)], z:map.getZoom() }; saveSoon();
   if (R.flying){ R.flying=false; return; } // the preview's own camera move doesn't count
   if (R.tab==="explore" && !R.nav && (!R.sel || document.body.classList.contains("mapfull"))) $("#areaBtn").classList.add("show");
 });
@@ -1267,18 +1269,19 @@ function drawTrails(){
     if (heads){ // overview shows trailheads only; the full line appears once a trail is picked
       const pin=L.circleMarker(t.head, { radius:8, color:"#fff", weight:2.5, fillColor:col, fillOpacity:1 }).addTo(trailLayer);
       const hit=L.circleMarker(t.head, { radius:18, stroke:false, fillOpacity:0 }).addTo(trailLayer);
-      [pin,hit].forEach(l=>{ l.on("click", e=>{ L.DomEvent.stop(e); previewTrail(t.id, visibleTrails().map(x=>x.id)); }); l.bindTooltip(t.name); });
+      [pin,hit].forEach(l=>{ l.on("click", e=>{ L.DomEvent.stop(e); previewTrail(t.id, visibleTrails().map(x=>x.id)); }); l.bindTooltip(esc(t.name)); });
       t._line=pin; continue; }
     const line=L.polyline(t.segs, { color:col, weight:4, opacity:.85 }).addTo(trailLayer);
     const hit=L.polyline(t.segs, { color:"#000", weight:18, opacity:0 }).addTo(trailLayer); // fat tap target
     const dot=L.circleMarker(t.head, { radius:5, color:"#fff", weight:2, fillColor:css("--accent"), fillOpacity:1 }).addTo(trailLayer);
-    [hit,dot].forEach(l=>{ l.on("click", e=>{ L.DomEvent.stop(e); previewTrail(t.id, visibleTrails().map(x=>x.id)); }); l.bindTooltip(t.name, { sticky:true }); });
+    [hit,dot].forEach(l=>{ l.on("click", e=>{ L.DomEvent.stop(e); previewTrail(t.id, visibleTrails().map(x=>x.id)); }); l.bindTooltip(esc(t.name), { sticky:true }); });
     t._line=line;
   }
 }
 function highlight(id, on){ const t=R.byId[id]; if (!t?._line) return; if (t._line.setRadius) t._line.setRadius(on?11:8); else t._line.setStyle({ weight:on?7:4, opacity:on?1:.85 }); }
 
 /* ================= searching ================= */
+let searchRun=0;
 async function searchArea(){
   if (navigator.onLine===false){ toast("You're offline. Trails you saved, and their maps, are under Saved."); return; }
   if (map.getZoom()<10){ toast("Zoom in a bit more to search for trails."); return; }
@@ -1298,12 +1301,14 @@ node["highway"="trailhead"](${bb});
 out;
 nwr["amenity"="parking"](${bb});
 out center;`;
+  const run=++searchRun; // a newer search makes this one's late answer irrelevant
   R.center=[c.lat,c.lng]; R.searching=true; R.searchErr=null; R.byId={};
   R.lastBB=[s-(n-s)/4, w-(e-w)/4, n+(n-s)/4, e+(e-w)/4]; setTrails(mergeAT(R.lastBB, [])); render(); // AllTrails trails right away
   try {
     const t=buildTrails(await overpass(q, ()=>{ const c=$(".count"); if (c) c.innerHTML='<span class="spin"></span> The trail server is slow, trying a backup server…'; }));
+    if (run!==searchRun) return;
     setTrails(mergeAT(R.lastBB, t));
-  } catch(e){ R.searchErr=navigator.onLine===false ? "You're offline." : "The OpenStreetMap trail servers are overloaded right now. Wait a few seconds and tap Try again."; }
+  } catch(e){ if (run!==searchRun) return; R.searchErr=navigator.onLine===false ? "You're offline." : "The OpenStreetMap trail servers are overloaded right now. Wait a few seconds and tap Try again."; }
   R.searching=false; render(); prefetchElev();
 }
 let prefetchRun=0;
@@ -1394,7 +1399,7 @@ function nearOnSegs(segs, ll){ const kx=Math.cos(ll[0]*RAD)*111320, ky=111320; l
 let snapOn=false;
 function trailSnap(ll, acc){
   const lim=Math.min(25, Math.max(10, acc))*(snapOn?1.5:1), dLat=lim/111320, dLng=lim/(111320*Math.cos(ll[0]*RAD));
-  const cands=new Set([R.nav?.t, R.sel, R.pv&&pvTrail(R.pv), ...(R.tab==="explore"?visibleTrails():[]), ...Object.values(S.saved)].filter(t=>t&&t.segs));
+  const cands=new Set([R.nav?.t, R.sel, R.pv&&pvTrail(R.pv), ...(R.tab==="explore"?R.trails:[]), ...Object.values(S.saved)].filter(t=>t&&t.segs));
   let best={ off:Infinity, p:null };
   for (const t of cands){ const b=t.bbox; if (b && (ll[0]<b[0]-dLat||ll[0]>b[2]+dLat||ll[1]<b[1]-dLng||ll[1]>b[3]+dLng)) continue;
     const r=nearOnSegs(t.segs, ll); if (r.off<best.off) best=r; }
@@ -1528,7 +1533,7 @@ async function openTrail(id){
   if (!t.segs && t.osm){ // imported from a share code: fetch the geometry now
     toast("Loading trail from OpenStreetMap…");
     try { const q=t.osm.t==="r" ? `[out:json];relation(${t.osm.ids[0]});out geom;` : `[out:json];way(id:${t.osm.ids.join(",")});out geom;`;
-      const built=buildTrails(await overpass(q))[0]; if (built){ Object.assign(t, { segs:built.segs, len:built.len, loop:built.loop, ends:built.ends, bbox:built.bbox, tags:built.tags });
+      const built=buildTrails(await overpass(q), { keepShort:true })[0]; if (!built) toast("Couldn't find that trail's map line on OpenStreetMap."); if (built){ Object.assign(t, { segs:built.segs, len:built.len, loop:built.loop, ends:built.ends, bbox:built.bbox, tags:built.tags });
         if (S.saved[id]) { S.saved[id]=snapshot(t); save(); } } }
     catch(e){ toast("Couldn't load that trail's map line right now."); }
   }
@@ -1697,7 +1702,7 @@ function toggleList(t, key, on){
 function drawSaved(){ if (R.tab!=="saved") return; trailLayer.clearLayers();
   for (const t of Object.values(S.saved)){
     if (t.segs) L.polyline(t.segs,{ color:css(DCOL[difficulty(t)]), weight:4 }).on("click",()=>openTrail(t.id)).addTo(trailLayer);
-    L.circleMarker(t.head,{ radius:6, color:"#fff", weight:2, fillColor:css("--accent"), fillOpacity:1 }).bindTooltip(t.name).on("click",()=>openTrail(t.id)).addTo(trailLayer); } }
+    L.circleMarker(t.head,{ radius:6, color:"#fff", weight:2, fillColor:css("--accent"), fillOpacity:1 }).bindTooltip(esc(t.name)).on("click",()=>openTrail(t.id)).addTo(trailLayer); } }
 function renderSaved(b){
   let h=weatherBoard(); const lists=Object.entries(S.lists);
   loadHourly();
@@ -1736,7 +1741,11 @@ async function shareCode(obj, title){
 function importCode(raw){
   let p; try { const c=String(raw).trim().replace(/^.*#import=/,"").replace(/^SB1\./,""); p=JSON.parse(b64d(c)); if (!Array.isArray(p.t)) throw 0; }
   catch(e){ toast("That share code isn't valid. Copy the whole thing again."); return; }
-  const key="l"+Date.now(); S.lists[key]={ name:p.n||"Shared list", ids:[] };
+  const ll=v=>Array.isArray(v) && v.length>=2 && Number.isFinite(+v[0]) && Number.isFinite(+v[1]) && Math.abs(v[0])<=90 && Math.abs(v[1])<=180;
+  p.t=p.t.filter(x=>x && typeof x.n==="string" && ll(x.h) && (!x.o || /^[rw]\d+(\.\d+)*$/.test(x.o)) && (!x.g || (Array.isArray(x.g) && x.g.every(sg=>Array.isArray(sg) && sg.every(ll)))));
+  if (!p.t.length){ toast("That share code has no trails in it that Switchback can read."); return; }
+  p.t.forEach(x=>{ x.h=[+x.h[0], +x.h[1]]; x.l=+x.l||0; });
+  const key="l"+Date.now(); S.lists[key]={ name:typeof p.n==="string"&&p.n?p.n:"Shared list", ids:[] };
   for (const x of p.t){
     let osm=null, id;
     if (x.o){ const kind=x.o[0], ids=x.o.slice(1).split(".").map(Number); osm={ t:kind, ids }; id=kind==="r"?"r"+ids[0]:"w"+ids[0]+"-"+ids.length; }
@@ -1750,7 +1759,7 @@ function importCode(raw){
 function hash(s){ let h=0; for (const c of s) h=(h*31+c.charCodeAt(0))|0; return h; }
 function importGpx(text){
   try { const x=new DOMParser().parseFromString(text,"application/xml");
-    const pts=[...x.querySelectorAll("trkpt,rtept")].map(p=>[+p.getAttribute("lat"),+p.getAttribute("lon")]).filter(p=>!isNaN(p[0]));
+    const pts=[...x.querySelectorAll("trkpt,rtept")].map(p=>[+p.getAttribute("lat"),+p.getAttribute("lon")]).filter(p=>Number.isFinite(p[0]) && Number.isFinite(p[1]));
     if (pts.length<2) throw 0;
     const name=(x.querySelector("trk>name,rte>name,metadata>name")?.textContent||"Imported trail").trim();
     const t=makeTrail("g"+Math.abs(hash(name+pts[0].join())).toString(36), name, [pts], {}, null, false);
@@ -2120,8 +2129,14 @@ const atNorm=s=>String(s).normalize("NFD").toLowerCase().replace(/\(.*?\)/g,"").
 const AT_DIFF={ Easy:"easy", Moderate:"moderate", Hard:"hard", Strenuous:"hard" };
 function atAreas(){ if (!AT||!R.center) return [];
   const b=map.getBounds(); return AT.areas.filter(a=>{ const [s,w,n,e]=a.bbox; return !(n<b.getSouth()||s>b.getNorth()||e<b.getWest()||w>b.getEast()); }); }
-function atById(id){ for (const a of (AT?.areas||[])) for (const x of a.trails) if (x.id===id) return x; return null; }
-function atFor(t){ if (t.atId){ const x=atById(t.atId); if (x) return x; } const k=atNorm(t.name); for (const a of (AT?.areas||[])) for (const x of a.trails) if (atNorm(x.n)===k) return x; return null; }
+function atById(id){ return atIndex().id.get(id)||null; }
+/* Name and id lookups are built once per alltrails.json load; atFor runs inside sorts and on every GPS fix. */
+let atIdx={ src:undefined };
+function atIndex(){ if (atIdx.src!==AT){ atIdx={ src:AT, id:new Map(), name:new Map() };
+    for (const a of (AT?.areas||[])) for (const x of a.trails){ atIdx.id.set(x.id, x); const k=atNorm(x.n); if (!atIdx.name.has(k)) atIdx.name.set(k, x); } }
+  return atIdx; }
+function atFor(t){ const ix=atIndex(); if (t.atId){ const x=ix.id.get(t.atId); if (x) return x; }
+  if (t._atK===undefined) t._atK=atNorm(t.name); return ix.name.get(t._atK)||null; }
 function atOnly(){ const f=R.filt, names=new Set(R.trails.map(t=>atNorm(t.name))), ids=new Set(R.trails.map(t=>t.atId).filter(Boolean)); let out=[];
   for (const a of atAreas()) for (const x of a.trails) if (!names.has(atNorm(x.n)) && !ids.has(x.id)) out.push(x);
   if (f.act==="bike") out=out.filter(x=>x.bike);
@@ -2157,7 +2172,7 @@ function atLayer(bounds){ if (!AT||!bounds) return []; const [s,w,n,e]=bounds, o
     if (bn<s||bs>n||be<w||bw>e) continue;
     seen.add(x.geo.o); out.push(t); }
   return out; }
-function atByName(k){ for (const a of (AT?.areas||[])) for (const x of a.trails) if (atNorm(x.n)===k) return x; return null; }
+function atByName(k){ return atIndex().name.get(k)||null; }
 // AllTrails versions first; OpenStreetMap trails that duplicate one of them are dropped, the rest get linked by name when possible.
 function mergeAT(bounds, osm){ const at=atLayer(bounds);
   const rest=osm.filter(t=>{ if (t.atId && t.id.startsWith("at")) return false; const k=atNorm(t.name);
@@ -2194,7 +2209,7 @@ out;`;
     if (sc>bs){ bs=sc; best=t; } }
   if (!best){ toast("OpenStreetMap has no trail called "+x.n+" here. Use the AllTrails link on its card."); return; }
   if (R.byId[best.id]){ toast("Closest trail on the map: "+R.byId[best.id].name); return previewTrail(best.id); }
-  best.name=x.n; best.atId=x.id; R.trails.push(best); R.byId[best.id]=best;
+  best.name=x.n; best._atK=undefined; best.atId=x.id; R.trails.push(best); R.byId[best.id]=best;
   previewTrail(best.id); }
 function atBox(t){ const x=atFor(t);
   if (x) return `<div class="box atbox"><div class="lab" style="margin-top:0"><span class="chip at">AllTrails</span></div>
