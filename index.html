@@ -723,6 +723,8 @@ button{cursor:pointer}
 .areabtn{position:fixed;z-index:15;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 62px);border:0;background:var(--brand);color:#fff;font-weight:600;padding:9px 16px;border-radius:999px;box-shadow:var(--shadow);display:none;white-space:nowrap}
 @media (prefers-color-scheme: dark){.areabtn{color:#10170f}}
 .areabtn.show{display:block}
+.condlinks{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.condlinks .btn{white-space:normal;text-align:left}
 .toast{position:fixed;z-index:40;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 108px);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:10px;font-size:.88rem;max-width:min(92vw,460px);text-align:center;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:1}
 
@@ -984,6 +986,9 @@ body.pving .leaflet-bottom{bottom:calc(var(--pvh,170px) + 14px)}
     <label><input type="checkbox" data-mf="headsOnly"> Show only trailheads on the overview (the full trail shows when you pick one)</label>
   </div>
   <p class="note" style="margin:4px 0 0">These also apply to the trail list. Activity, difficulty and length menus above the list still work too.</p>
+  <div class="lab">Navigate alerts</div>
+  <div class="row"><label style="flex:1 1 auto"><input type="checkbox" id="sndOn"> Play a sound when I leave or rejoin the trail</label><button class="btn" type="button" id="sndTest">Test</button></div>
+  <p class="note" style="margin:4px 0 0">If you can't hear it, check the volume. iPhone browsers can't vibrate, and they only alert while the screen is on.</p>
   <div class="lab">Units</div>
   <div class="seg" id="unitSeg"><button data-u="imp">Miles / ft</button><button data-u="met">Km / m</button></div>
   <div class="lab">Driving from (for drive times)</div>
@@ -997,7 +1002,9 @@ body.pving .leaflet-bottom{bottom:calc(var(--pvh,170px) + 14px)}
   <p class="note" id="offNote">Open a saved trail and tap Download for offline.</p>
   <button class="btn" id="offClear" type="button">Delete offline maps</button>
   <div class="lab">Data</div>
-  <p class="note">Saved trails, lists and recordings live only in this browser. Use share codes on the Saved tab to move them to another device.</p>
+  <p class="note">Saved trails, lists, notes and recordings live only on this phone. Save a backup file now and then (to iCloud Drive or Files) so you can restore them if the browser clears its storage or you switch phones.</p>
+  <div class="row"><button class="btn primary" type="button" id="bkSave">Save backup file</button><button class="btn" type="button" id="bkLoad">Restore from backup</button></div>
+  <p class="note" id="bkNote" style="margin:6px 0 0"></p>
   <div class="row" style="justify-content:space-between;margin-top:14px">
     <button class="btn warn" id="wipe">Erase all data</button>
     <button class="btn primary" id="closeSet">Done</button>
@@ -1031,12 +1038,56 @@ addEventListener("pagehide", ()=>save()); document.addEventListener("visibilityc
 function save(){ clearTimeout(saveT); try { localStorage.setItem(KEY, JSON.stringify(S)); return true; } catch(e){ toast("Storage is full or blocked; changes may not stick."); return false; } }
 
 const R = { tab:"explore", trails:[], byId:{}, sel:null, filt:{ act:"hike", diff:"", len:"", sort:"best" }, center:null,
-  searching:false, searchErr:null, wx:{}, drive:{}, rec:null, hl:{}, media:{}, base:"Esri Topo", nav:null };
+  searching:false, searchErr:null, wx:{}, drive:{}, rec:null, hl:{}, areas:{}, media:{}, base:"Esri Topo", nav:null };
 if (/^(hike|bike|all)$/.test(savedAct||"")) R.filt.act=savedAct;
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 let toastT; function toast(t, ms){ const e=$("#toast"); e.textContent=t; e.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>e.classList.remove("show"), ms||3200); }
+
+
+/* ================= device layer =================
+   Every phone feature goes through Device, so turning Switchback into an iPhone/Android app (Capacitor) means
+   rewriting only these function bodies. The plugin to use for each is noted. Nothing else calls these browser APIs. */
+const Device={
+  isApp: !!window.Capacitor?.isNativePlatform?.(),
+  // GPS. App: @capacitor-community/background-geolocation, which keeps tracking with the screen locked.
+  watchPosition(onFix, onErr){ if (!navigator.geolocation) return null;
+    const id=navigator.geolocation.watchPosition(onFix, onErr, { enableHighAccuracy:true, maximumAge:1000, timeout:30000 });
+    return ()=>navigator.geolocation.clearWatch(id); },
+  getPosition(){ return new Promise((ok, no)=>navigator.geolocation ? navigator.geolocation.getCurrentPosition(ok, no, { enableHighAccuracy:true, timeout:20000 }) : no(new Error("no geolocation"))); },
+  hasGps(){ return !!navigator.geolocation; },
+  // Keep the screen on. App: @capacitor-community/keep-awake (not needed for GPS once background tracking is used).
+  async keepAwake(){ try { return await navigator.wakeLock?.request("screen"); } catch(e){ return null; } },
+  // Vibration. iPhone Safari ignores it. App: @capacitor/haptics.
+  buzz(pattern){ try { navigator.vibrate?.(pattern); } catch(e){} },
+  // Short tones made in the page. iPhone only allows sound after a tap, so unlockSound() runs on taps.
+  // App: same code works; @capacitor/local-notifications adds lock-screen alerts.
+  _ac:null,
+  unlockSound(){ try { if (navigator.audioSession) navigator.audioSession.type="transient"; // play over music briefly, like a nav prompt
+      const AC=window.AudioContext||window.webkitAudioContext; if (!AC) return; this._ac??=new AC(); if (this._ac.state!=="running") this._ac.resume(); } catch(e){} },
+  tone(notes){ const ac=this._ac; if (!ac) return false; let t=ac.currentTime+0.02;
+    for (const [hz, dur] of notes){ const o=ac.createOscillator(), g=ac.createGain(); o.type="sine"; o.frequency.value=hz;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.6, t+0.02); g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+      o.connect(g).connect(ac.destination); o.start(t); o.stop(t+dur+0.02); t+=dur+0.08; }
+    return true; },
+  // Lock-screen notification. Browsers can't do this reliably from the background. App: @capacitor/local-notifications.
+  notify(title, body){ try { if (document.visibilityState==="hidden" && window.Notification?.permission==="granted") new Notification(title, { body, tag:"switchback" }); } catch(e){} },
+  // Files. App: @capacitor/filesystem + @capacitor/share.
+  async saveFile(name, text, type){ const blob=new Blob([text], { type });
+    try { const f=new File([blob], name, { type }); if (navigator.canShare?.({ files:[f] }) && /iPhone|iPad|Android/.test(navigator.userAgent)){ await navigator.share({ files:[f] }); return; } } catch(e){ if (e.name==="AbortError") return; }
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000); },
+  pickFile(accept){ return new Promise(ok=>{ const i=document.createElement("input"); i.type="file"; i.accept=accept;
+    i.onchange=()=>{ const f=i.files[0]; if (!f) return ok(null); const r=new FileReader(); r.onload=()=>ok(String(r.result)); r.onerror=()=>ok(null); r.readAsText(f); }; i.click(); }); },
+  async copyText(text){ await navigator.clipboard.writeText(text); },
+  // Share sheet; returns false when there isn't one. App: @capacitor/share.
+  async shareText(title, text, url){ if (!navigator.share) return false;
+    try { await navigator.share({ title, text, url }); return true; } catch(e){ return e.name==="AbortError"; } },
+};
+/* Links that leave the device (share codes) always point at the public site, also from inside the app. */
+const PUBLIC_URL=location.protocol.startsWith("http") && !Device.isApp ? location.href.split("#")[0] : "https://jixter86.github.io/Switchback/";
+document.addEventListener("touchend", ()=>Device.unlockSound(), { capture:true, passive:true });
+document.addEventListener("click", ()=>Device.unlockSound(), { capture:true });
 
 /* ================= geometry ================= */
 const RAD = Math.PI/180;
@@ -1062,10 +1113,11 @@ const perp=(p,a,b)=>segNear(p,a,b).off;
 function bboxOf(segs){ let s=90,w=180,n=-90,e=-180; for (const g of segs) for (const p of g){ if(p[0]<s)s=p[0]; if(p[0]>n)n=p[0]; if(p[1]<w)w=p[1]; if(p[1]>e)e=p[1]; } return [s,w,n,e]; }
 /* Chain unordered segments into one walkable line, starting at the trailhead. */
 function orderPath(segs, start){
-  const rest=segs.map(s=>s.slice()); const out=[]; let cur=start;
+  const rest=segs.map(s=>s.slice()); const out=[]; out.br=new Set(); let cur=start;
   while (rest.length){ let bi=0, rev=false, bd=Infinity;
     rest.forEach((s,i)=>{ const d1=fd(cur,s[0]), d2=fd(cur,s[s.length-1]); if (d1<bd){bd=d1;bi=i;rev=false;} if (d2<bd){bd=d2;bi=i;rev=true;} });
-    const s=rest.splice(bi,1)[0]; if (rev) s.reverse(); out.push(...s); cur=s[s.length-1]; }
+    const s=rest.splice(bi,1)[0]; if (rev) s.reverse(); if (out.length && bd>30) out.br.add(out.length); // a jump to a separate piece
+    out.push(...s); cur=s[s.length-1]; }
   return out;
 }
 /* Ends of the network: segment endpoints not shared with another segment. None means a loop. */
@@ -1372,12 +1424,11 @@ $("#areaBtn").onclick=searchArea;
 /* One GPS watch shared by everything that needs position (blue dot, Navigate, Recording), so the phone
    only runs one high-accuracy watch and each fix is read once. Subscribers get (position) or (null, error). */
 const GPS={ watch:null, subs:new Set(), last:null };
-function gpsOn(fn){ if (!navigator.geolocation) return false; GPS.subs.add(fn);
+function gpsOn(fn){ if (!Device.hasGps()) return false; GPS.subs.add(fn);
   const l=GPS.last; if (l && Date.now()-l.timestamp<10000) setTimeout(()=>GPS.subs.has(fn)&&fn(l)); // a new listener starts from the latest fix
-  if (GPS.watch===null) GPS.watch=navigator.geolocation.watchPosition(p=>{ GPS.last=p; GPS.subs.forEach(f=>f(p)); }, e=>GPS.subs.forEach(f=>f(null,e)),
-    { enableHighAccuracy:true, maximumAge:1000, timeout:30000 });
+  if (GPS.watch===null) GPS.watch=Device.watchPosition(p=>{ GPS.last=p; GPS.subs.forEach(f=>f(p)); }, e=>GPS.subs.forEach(f=>f(null,e)));
   return true; }
-function gpsOff(fn){ GPS.subs.delete(fn); if (!GPS.subs.size && GPS.watch!==null){ navigator.geolocation.clearWatch(GPS.watch); GPS.watch=null; } }
+function gpsOff(fn){ GPS.subs.delete(fn); if (!GPS.subs.size && GPS.watch!==null){ GPS.watch?.(); GPS.watch=null; } }
 
 /* my location: blue dot with accuracy ring and a cone for the way the phone faces. Tap = center and follow;
    dragging the map stops following; tap again to recenter; tap while following to turn it off. */
@@ -1406,7 +1457,8 @@ function setHeading(h){
 function geoFilter(f, p){
   const c=p.coords, acc=Math.max(c.accuracy||30, 3), t=p.timestamp||Date.now();
   if (f.v!=null && acc>Math.max(50, 4*Math.sqrt(f.v)) && t-f.t<5000) return null; // a stray poor fix
-  if (f.v==null || acc>500){ Object.assign(f, { lat:c.latitude, lng:c.longitude, v:acc*acc, t }); }
+  const jump=f.v!=null && hav([f.lat,f.lng],[c.latitude,c.longitude])>Math.max(50, 4*acc, 3*Math.sqrt(f.v)); // a real move the filter can't explain (GPS came back, or you drove): start over there
+  if (f.v==null || acc>500 || jump){ Object.assign(f, { lat:c.latitude, lng:c.longitude, v:acc*acc, t }); }
   else { const dt=Math.max(0,(t-f.t)/1000), q=c.speed>0.7 ? Math.max(4, c.speed*3) : 2.5; // walking pace of uncertainty per second
     f.v+=dt*q*q; const k=f.v/(f.v+acc*acc);
     f.lat+=k*(c.latitude-f.lat); f.lng+=k*(c.longitude-f.lng); f.v*=(1-k); f.t=t; }
@@ -1443,7 +1495,7 @@ async function startCompass(loud){ if (orientOn) return;
   catch(e){ return; }
   orientOn=true; addEventListener("deviceorientationabsolute", onOrient); addEventListener("deviceorientation", onOrient); }
 function meStart(follow){
-  if (!navigator.geolocation){ toast("This browser can't share your location."); return; }
+  if (!Device.hasGps()){ toast("This browser can't share your location."); return; }
   meFollow=follow; if (meWatch!==null){ meState(); return; }
   meWatch=meFix; gpsOn(meFix); meState(); }
 function meFix(p, e){
@@ -1547,7 +1599,7 @@ function renderExplore(b){
   $("#fSort").onchange=e=>{ f.sort=e.target.value; render(); prefetchElev(); };
   $("#retry")&&($("#retry").onclick=searchArea);
   $("#nearMe")&&($("#nearMe").onclick=()=>{ if (!navigator.geolocation) return toast("This browser can't share your location.");
-    navigator.geolocation.getCurrentPosition(p=>{ flyTo([p.coords.latitude,p.coords.longitude]); }, ()=>toast("Location permission was denied.")); });
+    Device.getPosition().then(p=>flyTo([p.coords.latitude,p.coords.longitude]), ()=>toast("Location permission was denied.")); });
   bindCards(b);
 }
 
@@ -1597,6 +1649,7 @@ async function loadExtras(t){
   if (t.segs && (R.hl[t.id]==null || R.hl[t.id]==="err")){ R.hl[t.id]=null; jobs.push(loadHighlights(t).then(x=>{ R.hl[t.id]=x; if (S.saved[t.id]){ S.saved[t.id].hl=x; save(); } drawHighlights(t); }).catch(()=>{ R.hl[t.id]=S.saved[t.id]?.hl||"err"; })); }
   if (t.segs && R.media[t.id]==null) jobs.push(loadMedia(t).then(x=>{ R.media[t.id]=x; }).catch(()=>{ R.media[t.id]="err"; }));
   if (!t.segs){ if (R.hl[t.id]==null) R.hl[t.id]=S.saved[t.id]?.hl||[]; if (R.media[t.id]==null) R.media[t.id]="err"; }
+  if (R.areas[t.id]==null) jobs.push(loadAreas(t));
   const dk=S.home ? S.home.lat+","+S.home.lng+">"+hk : null;
   if (dk && !R.drive[dk]) jobs.push((async()=>{ try { R.drive[dk]=await getDrive(t.head); } catch(e){ R.drive[dk]="err"; } })());
   await Promise.all(jobs.map(j=>j.then(()=>{ if (R.sel===t) renderSoon(150); })));
@@ -1661,7 +1714,7 @@ function renderDetail(b){
   const site=tg.website||tg.url; if (site && /^https?:\/\//.test(site)) rows.push(["Website", `<a href="${esc(site)}" target="_blank" rel="noopener">${esc(site.replace(/^https?:\/\//,""))}</a>`, true]);
   const osmUrl=t.osm ? `https://www.openstreetmap.org/${t.osm.t==="r"?"relation":"way"}/${t.osm.ids[0]}` : null;
   if (osmUrl) rows.push(["Source", `<a href="${osmUrl}" target="_blank" rel="noopener">OpenStreetMap</a> (edit it there if something's wrong)`, true]);
-  h+=atBox(t);
+  h+=conditionsHtml(t)+atBox(t);
   if (rows.length) h+=`<div class="box"><div class="lab" style="margin-top:0">Details</div><dl class="tags">${rows.map(r=>`<dt>${r[0]}</dt><dd>${r[2]?r[1]:esc(r[1])}</dd>`).join("")}</dl></div>`;
 
   const off=S.saved[t.id]?.offline;
@@ -1714,7 +1767,7 @@ function bindProfile(t){
 
 /* ================= saved lists ================= */
 function snapshot(t){ return { id:t.id, name:t.name, atId:t.atId||null, osm:t.osm, head:t.head.map(x=>+x.toFixed(6)), headSrc:t.headSrc, kind:t.kind||"hike", official:!!t.official, len:Math.round(t.len), loop:t.loop, partial:t.partial, tags:t.tags,
-  segs:t.segs?t.segs.map(s=>simplify(s,4).map(p=>[+p[0].toFixed(5),+p[1].toFixed(5)])):null, bbox:t.bbox, ends:t.ends, elev:t.elev||S.elev[t.id]||null,
+  segs:t.segs?t.segs.map(s=>simplify(s,4).map(p=>[+p[0].toFixed(5),+p[1].toFixed(5)])):null, bbox:t.bbox, ends:t.ends, elev:t.elev||S.elev[t.id]||null, areas:Array.isArray(R.areas[t.id])?R.areas[t.id]:null,
   notes:S.saved[t.id]?.notes||"", hiked:S.saved[t.id]?.hiked||"", added:S.saved[t.id]?.added||Date.now() }; }
 function savedTrail(id){ return S.saved[id] ? Object.assign({}, S.saved[id]) : null; }
 function toggleList(t, key, on){
@@ -1757,9 +1810,9 @@ const b64e=s=>btoa(unescape(encodeURIComponent(s))).replace(/\+/g,"-").replace(/
 const b64d=s=>{ s=s.trim().replace(/-/g,"+").replace(/_/g,"/"); return decodeURIComponent(escape(atob(s+"===".slice((s.length+3)%4)))); };
 async function shareCode(obj, title){
   const code="SB1."+b64e(JSON.stringify(obj));
-  const link=(location.protocol.startsWith("http")?location.href.split("#")[0]:"")+"#import="+code;
-  const text=location.protocol.startsWith("http") ? link : code;
-  if (navigator.share){ try { await navigator.share({ title:"Switchback: "+title, text:"Open in Switchback (Saved → Import): "+code, url:location.protocol.startsWith("http")?link:undefined }); return; } catch(e){ if (e.name==="AbortError") return; } }
+  const link=PUBLIC_URL+"#import="+code;
+  if (await Device.shareText("Switchback: "+title, "Open in Switchback (Saved → Import): "+code, link)) return;
+  const text=link;
   copy(text, "Share code copied. Paste it into Saved → Import on the other device.");
 }
 function importCode(raw){
@@ -1830,7 +1883,7 @@ let wake=null, recTick=null, recSaved=0;
 function recPersist(force){ const r=R.rec; if (!r) return;
   if (!force && r.pts.length-recSaved<5) return; recSaved=r.pts.length;
   try { localStorage.setItem(REC_KEY, JSON.stringify({ start:r.start, idle:r.idle, paused:r.paused, pausedAt:r.pausedAt, pts:r.pts })); } catch(e){} }
-async function recWake(){ try { if (R.rec && document.visibilityState==="visible") wake=await navigator.wakeLock?.request("screen"); } catch(e){} }
+async function recWake(){ if (R.rec && document.visibilityState==="visible") wake=await Device.keepAwake(); }
 document.addEventListener("visibilitychange", ()=>{ if (document.visibilityState==="visible") recWake(); else recPersist(true); });
 function recFix(p, e){ const r=R.rec; if (!r) return;
   if (!p){ if (e.code===1) toast("Location is turned off for this site, so the recording can't continue."); return; }
@@ -1842,7 +1895,7 @@ function recFix(p, e){ const r=R.rec; if (!r) return;
   recPersist();
   if (R.tab==="record" && !R.sel) recStatsDraw(); }
 function startRec(resume){
-  if (!navigator.geolocation) return toast("This browser can't record location.");
+  if (!Device.hasGps()) return toast("This browser can't record location.");
   const r=R.rec=Object.assign({ start:Date.now(), idle:0, paused:false, pts:[] }, resume||{}, { f:{} });
   r.line=L.polyline(r.pts.map(p=>[p[0],p[1]]), { color:css("--accent"), weight:5 }).addTo(recLayer);
   recSaved=r.pts.length; recPersist(true); recWake(); gpsOn(recFix);
@@ -1868,13 +1921,36 @@ function trailGpx(t){ const path=orderPath(t.segs, t.head);
   return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Switchback" xmlns="http://www.topografix.com/GPX/1/1">\n<metadata><name>${xesc(t.name)}</name><copyright author="OpenStreetMap contributors"><license>https://opendatacommons.org/licenses/odbl/</license></copyright></metadata>\n<wpt lat="${t.head[0]}" lon="${t.head[1]}"><name>Trailhead</name></wpt>\n<trk><name>${xesc(t.name)}</name><trkseg>\n${path.map(p=>`<trkpt lat="${p[0]}" lon="${p[1]}"/>`).join("\n")}\n</trkseg></trk>\n</gpx>\n`; }
 function recGpx(r){ return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Switchback" xmlns="http://www.topografix.com/GPX/1/1">\n<trk><name>${xesc(r.name)}</name><trkseg>\n${r.pts.map(p=>`<trkpt lat="${p[0]}" lon="${p[1]}">${p[2]!=null?`<ele>${p[2]}</ele>`:""}<time>${new Date(p[3]).toISOString()}</time></trkpt>`).join("\n")}\n</trkseg></trk>\n</gpx>\n`; }
 const slug=s=>String(s).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"trail";
-function download(name, text, type){ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([text],{ type })); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000); }
-async function copy(text, msg){ try { await navigator.clipboard.writeText(text); toast(msg); } catch(e){ prompt("Copy this:", text); } }
+const download=(name, text, type)=>Device.saveFile(name, text, type);
+async function copy(text, msg){ try { await Device.copyText(text); toast(msg); } catch(e){ prompt("Copy this:", text); } }
+
+/* ================= backup =================
+   One JSON file with everything you made: lists, saved trails, notes, recordings and settings. Offline map tiles
+   aren't included (they can be downloaded again). The same file format will work in the app version. */
+async function backupSave(){ recPersist(true); S.backupAt=Date.now(); save();
+  let rec=null; try { rec=JSON.parse(localStorage.getItem(REC_KEY)); } catch(e){}
+  const data={ app:"switchback", v:1, at:new Date().toISOString(), S:Object.assign({}, S, { elev:{} }), rec };
+  await Device.saveFile("switchback-backup-"+new Date().toLocaleDateString("en-CA")+".json", JSON.stringify(data), "application/json");
+  $("#bkNote")&&($("#bkNote").textContent="Last backup just now."); }
+async function backupLoad(){ const text=await Device.pickFile("application/json,.json"); if (!text) return;
+  let d; try { d=JSON.parse(text); if (d.app!=="switchback" || !d.S || typeof d.S.lists!=="object" || typeof d.S.saved!=="object") throw 0; }
+  catch(e){ toast("That isn't a Switchback backup file."); return; }
+  const n=Object.keys(d.S.saved).length, r=(d.S.recs||[]).length;
+  if (!confirm(`Restore the backup from ${new Date(d.at).toLocaleDateString()}? It has ${n} saved trail${n===1?"":"s"} and ${r} recording${r===1?"":"s"}, and replaces what's on this phone now.`)) return;
+  const keep={ view:S.view, locOn:S.locOn }; S=Object.assign(structuredClone(DEF), d.S, keep);
+  for (const t of Object.values(S.saved)) if (!Array.isArray(t.head) || !t.head.every(Number.isFinite)) delete S.saved[t.id]; // skip anything damaged
+  if (!save()){ toast("Couldn't restore: storage is full."); return; }
+  if (d.rec && !R.rec){ try { localStorage.setItem(REC_KEY, JSON.stringify(d.rec)); } catch(e){} recResume(); }
+  $("#settings").close(); setTab("saved"); toast(`Restored ${n} saved trail${n===1?"":"s"} and ${r} recording${r===1?"":"s"}.`); }
 
 /* ================= settings ================= */
 function openSettings(){ const d=$("#settings");
   fillSettings(); if (!d.open) d.showModal(); }
 function fillSettings(){
+  $("#bkNote").textContent=S.backupAt ? "Last backup "+fmtAgo(S.backupAt)+"." : "No backup saved yet.";
+  $("#bkSave").onclick=backupSave; $("#bkLoad").onclick=backupLoad;
+  $("#sndOn").checked=S.sound!==false; $("#sndOn").onchange=e=>{ S.sound=e.target.checked; save(); };
+  $("#sndTest").onclick=()=>{ Device.unlockSound(); setTimeout(()=>{ Device.tone(ALERTS.off); setTimeout(()=>Device.tone(ALERTS.on), 1400); }, 60); };
   const m=mapF(); document.querySelectorAll("#mapFilt [data-mf]").forEach(c=>{ c.checked=!!m[c.dataset.mf];
     c.onchange=()=>{ S.mf=Object.assign(mapF(), { [c.dataset.mf]:c.checked }); save(); if (R.pv && !visibleTrails().some(x=>x.id===R.pv)) closePreview(); render(); }; });
   offlineStats().then(st=>{ if (st&&st.n) $("#offNote").textContent=`${st.n} map tiles stored${st.mb!=null?`, about ${st.mb} MB used by this app`:""}.`; });
@@ -1887,7 +1963,7 @@ document.querySelectorAll("#unitSeg button").forEach(b=>b.onclick=()=>{ S.units=
 $("#homeForm").onsubmit=async e=>{ e.preventDefault(); const v=$("#homeIn").value.trim(); if (!v) return;
   try { const r=(await geocode(v,1))[0]; if (!r) throw 0; setHome({ lat:r.lat, lng:r.lng, label:[r.label,r.sub&&r.sub!=="Coordinates"?r.sub.split(",")[0]:""].filter(Boolean).join(", ") }); }
   catch(err){ $("#homeNote").textContent="Couldn't find that. Try a town name or coordinates like 47.61, -122.20."; } };
-$("#homeGps").onclick=()=>navigator.geolocation?.getCurrentPosition(p=>setHome({ lat:+p.coords.latitude.toFixed(5), lng:+p.coords.longitude.toFixed(5), label:"my location" }), ()=>{ $("#homeNote").textContent="Location permission was denied."; });
+$("#homeGps").onclick=()=>Device.getPosition().then(p=>setHome({ lat:+p.coords.latitude.toFixed(5), lng:+p.coords.longitude.toFixed(5), label:"my location" }), ()=>{ $("#homeNote").textContent="Location permission was denied."; });
 function setHome(h){ S.home=h; save(); $("#homeIn").value=h.label; $("#homeNote").textContent="Drive times start from "+h.label+"."; if (R.sel) loadExtras(R.sel); }
 $("#wipe").onclick=()=>{ if (!confirm("Erase every saved trail, list and recording on this device?")) return; S=structuredClone(DEF); save(); $("#settings").close(); setTab("explore"); };
 window.openSettings=openSettings;
@@ -1909,7 +1985,7 @@ const HL = [
 function trailPts(t){ // ordered points with distance from the trailhead, for "at 1.2 mi"
   if (t.elev?.pts) return t.elev.pts.map((p,i)=>[p[0],p[1],t.elev.prof[i][0]]);
   const path=orderPath(t.segs,t.head), step=Math.max(1,Math.floor(path.length/150)), out=[]; let d=0;
-  path.forEach((p,i)=>{ if (i) d+=Math.min(200,hav(path[i-1],p)); if (i%step===0) out.push([p[0],p[1],d]); }); return out;
+  path.forEach((p,i)=>{ if (i && !path.br.has(i)) d+=hav(path[i-1],p); if (i%step===0) out.push([p[0],p[1],d]); }); return out;
 }
 async function loadHighlights(t){
   const [s,w,n,e]=t.bbox, pad=0.005, bb=[s-pad,w-pad,n+pad,e+pad].map(x=>x.toFixed(5)).join(",");
@@ -2276,6 +2352,40 @@ function atBox(t){ const x=atFor(t);
     <a class="btn" href="https://www.google.com/search?q=${encodeURIComponent("site:alltrails.com "+t.name)}" target="_blank" rel="noopener">Find on AllTrails</a></div>`; }
 
 
+/* ================= trail conditions =================
+   Recent conditions come from the people who report them: WTA trip reports (Washington), AllTrails reviews, and the
+   alerts page of whoever manages the land (Forest Service, National Park Service, state parks). The land manager is
+   found from OpenStreetMap: the protected areas the trailhead sits inside. */
+const inWA=ll=>ll[0]>45.5 && ll[0]<49.05 && ll[1]>-124.9 && ll[1]<-116.9;
+const USFS={ "mount baker-snoqualmie":"mbs", "okanogan-wenatchee":"okawen", "gifford pinchot":"giffordpinchot", "olympic":"olympic", "colville":"colville", "mount hood":"mthood" };
+const NPS={ "mount rainier":"mora", "olympic":"olym", "north cascades":"noca", "haleakal":"hale", "hawai":"havo" };
+function areaLink(tg){ const n=tg.name||"", low=n.toLowerCase(), web=/^https?:\/\//.test(tg.website||"") ? tg.website : null;
+  if (/national forest/.test(low)){ const k=Object.keys(USFS).find(k=>low.startsWith(k)); if (k) return `https://www.fs.usda.gov/r06/${USFS[k]}/alerts`; }
+  if (/national park/.test(low)){ const m=(web||"").match(/nps\.gov\/([a-z]{4})/), k=Object.keys(NPS).find(k=>low.startsWith(k));
+    const code=m?.[1] || (k && NPS[k]); if (code) return `https://www.nps.gov/${code}/planyourvisit/conditions.htm`; }
+  return web || "https://www.google.com/search?q="+encodeURIComponent(n+" trail closures alerts"); }
+async function loadAreas(t){
+  R.areas[t.id]="busy";
+  try { const [la,ln]=t.head.map(v=>(+v).toFixed(5));
+    const j=await overpass(`[out:json][timeout:20];is_in(${la},${ln})->.a;(area.a["boundary"~"^(protected_area|national_park)$"]["name"];area.a["leisure"="nature_reserve"]["name"];area.a["leisure"="park"]["name"]["operator"];);out tags;`);
+    const seen=new Set(), out=[];
+    for (const e of j.elements||[]){ const tg=e.tags||{}, n=tg.name; if (!n || seen.has(n)) continue; seen.add(n);
+      const rank=/national park/i.test(n)?0 : /national forest/i.test(n)?1 : /state park|monument/i.test(n)?2 : /wilderness/i.test(n)?4 : 3;
+      out.push({ n, u:areaLink(tg), rank }); }
+    R.areas[t.id]=out.sort((a,b)=>a.rank-b.rank).slice(0,3);
+    if (S.saved[t.id]){ S.saved[t.id].areas=R.areas[t.id]; save(); } }
+  catch(e){ R.areas[t.id]=S.saved[t.id]?.areas || "err"; } }
+function conditionsHtml(t){
+  const links=[], a=atFor(t), ar=R.areas[t.id];
+  if (inWA(t.head)) links.push([`https://www.wta.org/go-outside/hikes?title=${encodeURIComponent(t.name.replace(/\b(trail|trailhead)\b/ig,"").trim())}`, "Recent trip reports on WTA"]);
+  if (a) links.push([a.u, "Recent reviews on AllTrails"]);
+  if (Array.isArray(ar)) for (const x of ar) links.push([x.u, "Alerts and closures: "+x.n]);
+  let h=`<div class="box"><div class="lab" style="margin-top:0">Trail conditions</div><p class="note" style="margin:0 0 8px">Check recent reports for snow, mud, washouts and closures before you go.</p><div class="condlinks">`+
+    links.map(([u,l])=>`<a class="btn" href="${esc(u)}" target="_blank" rel="noopener">${esc(l)} &#8599;</a>`).join("")+`</div>`;
+  if (ar==="busy" || ar==null) h+=`<p class="note" style="margin:8px 0 0"><span class="spin"></span> Finding who manages this land…</p>`;
+  else if (ar==="err" && !links.length) h+=`<p class="note" style="margin:8px 0 0">Couldn't look up land-manager alerts right now.</p>`;
+  return h+`</div>`; }
+
 /* ================= trail preview card (map stays visible) ================= */
 R.thumbs={};
 function thumbMap(t, W){ // little topo map of the trail: Esri tiles + the trail line
@@ -2354,21 +2464,21 @@ const compass=(a,b)=>COMPASS[Math.round(bearing(a,b)/45)%8];
 /* The trail as one ordered line from the trailhead with running distance; jumps between disconnected pieces
    don't count. Used by the elevation profile and Navigate so their distances agree. */
 function navPath(t){ const path=orderPath(t.segs, t.head), cum=[0];
-  for (let i=1;i<path.length;i++){ const d=hav(path[i-1],path[i]); cum.push(cum[i-1]+(d>200?0:d)); }
-  return { path, cum, total:cum[cum.length-1]||1 }; }
+  for (let i=1;i<path.length;i++) cum.push(cum[i-1]+(path.br.has(i)?0:hav(path[i-1],path[i])));
+  return { path, cum, br:path.br, total:cum[cum.length-1]||1 }; }
 /* Nearest point on the trail: how far off it you are and how far along it that point is. */
 function snapTo(nv, ll){ let best={ off:Infinity, at:0, p:nv.path[0] };
   for (let i=1;i<nv.path.length;i++){ const a=nv.path[i-1], b=nv.path[i];
-    if (nv.cum[i]===nv.cum[i-1] && hav(a,b)>200) continue; // gap between separate pieces
+    if (nv.br.has(i)) continue; // gap between separate pieces
     const r=segNear(ll, a, b); if (r.off<best.off) best={ off:r.off, at:nv.cum[i-1]+r.f*(nv.cum[i]-nv.cum[i-1]), p:r.q }; }
   return best; }
 function eleAt(t, at){ const p=t.elev?.prof; if (!p) return null;
   for (let i=1;i<p.length;i++) if (p[i][0]>=at){ const f=(at-p[i-1][0])/((p[i][0]-p[i-1][0])||1); return p[i-1][1]+f*(p[i][1]-p[i-1][1]); }
   return p[p.length-1][1]; }
-async function navWakeLock(){ try { if (R.nav && document.visibilityState==="visible") R.nav.wake=await navigator.wakeLock?.request("screen"); } catch(e){} }
+async function navWakeLock(){ if (R.nav && document.visibilityState==="visible") R.nav.wake=await Device.keepAwake(); }
 document.addEventListener("visibilitychange", navWakeLock); // the screen lock is dropped whenever the app is hidden
 function startNav(t){
-  if (!navigator.geolocation){ toast("This browser can't share your location."); return; }
+  if (!Device.hasGps()){ toast("This browser can't share your location."); return; }
   if (!t.segs){ toast("This trail's map line hasn't loaded, so it can't be navigated."); return; }
   stopNav(true);
   const nv=Object.assign(navPath(t), { t, follow:true, isOff:false, last:null, s:null });
@@ -2395,12 +2505,20 @@ function navFix(p, e){ const nv=R.nav; if (!nv) return;
   const shown=trailSnap(ll, g.acc);
   if (first){ nv.me.setLatLng(shown); nv.acc.setLatLng(shown).setRadius(g.acc); } else glide(nv.me, nv.acc, shown, g.acc);
   nv.s=snapTo(nv, ll);
-  const off=nv.s.off > Math.max(60, g.acc); // allow for GPS error before calling it off trail
-  if (off && !nv.isOff) navigator.vibrate?.([250,120,250]);
+  const lim=Math.max(60, g.acc), off=nv.s.off > (nv.isOff ? lim*0.7 : lim); // allow for GPS error; a margin so it doesn't flicker at the edge
+  if (nv.s.off<1500){ // farther than that you're still getting to the trailhead
+    if (off && (!nv.isOff || Date.now()-nv.offAt>60000)){ trailAlert("off"); nv.offAt=Date.now(); } // and a reminder each minute
+    else if (!off && nv.isOff) trailAlert("on"); }
   nv.isOff=off;
   if (nv.follow){ if (first) R.navC=null; followTo(ll, first ? 16 : map.getZoom(), !first, "navC"); }
   navDraw();
 }
+/* Leaving or rejoining the trail: a falling tone (off) or rising chime (back on), a buzz where the phone
+   supports it, and a notification if the app is in the background (works once it's a real app). */
+const ALERTS={ off:[[523,.16],[523,.16],[349,.4]], on:[[523,.12],[784,.25]] };
+function trailAlert(kind){ if (S.sound!==false) Device.tone(ALERTS[kind]);
+  Device.buzz(kind==="off" ? [250,120,250] : [80]);
+  if (kind==="off" && R.nav) Device.notify("Off trail", "You've left "+R.nav.t.name+"."); }
 function navDraw(){
   const e=$("#nav"), nv=R.nav; if (!nv){ e.hidden=true; e.innerHTML=""; return; }
   const t=nv.t; let main, sub=[];
