@@ -3,7 +3,7 @@ import { chromium } from "playwright";
 const url = process.env.SITE || "https://jixter86.github.io/Switchback/";
 const res = []; const ck = (name, ok, info = "") => { res.push([ok ? "PASS" : "FAIL", name, info]); console.log(ok ? "PASS" : "FAIL", name, typeof info === "string" ? info : JSON.stringify(info)); };
 const W = ms => new Promise(r => setTimeout(r, ms));
-for (let i = 0; i < 40; i++) { const r = await fetch(url + "?" + Date.now()); if (r.ok && (await r.text()).includes("listRefresh")) { console.log("new build live"); break; } await W(10000); }
+for (let i = 0; i < 40; i++) { const r = await fetch(url + "?" + Date.now()); if (r.ok && (await r.text()).includes("rsDue")) { console.log("new build live"); break; } await W(10000); }
 const b = await chromium.launch();
 const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: false, geolocation: { latitude: 47.4957, longitude: -121.7868 }, permissions: ["geolocation"] });
 const pg = await ctx.newPage(); const errs = [];
@@ -79,7 +79,7 @@ await step("Trail conditions links", async () => { await pg.waitForFunction(() =
   ck("Trail conditions links", r.some(x => /wta\.org/.test(x)) && r.some(x => /Alerts and closures/.test(x)), r); });
 await step("Save trail from details", async () => { await ev(() => { const c = document.querySelector("[data-list]"); c.checked = true; c.dispatchEvent(new Event("change", { bubbles: true })); }); await W(500); ck("Save trail from details", await ev(id => !!S.saved[id], mtsi)); });
 await step("Back from details returns to preview", async () => { await pg.click("#back"); await W(800); ck("Back from details returns to preview", await ev(() => !!R.pv), await ev(() => R.pv)); });
-await step("Details then Map button then pan loads trails", async () => { await ev(id => openTrail(id), mtsi); await W(800); await ev(() => mapFull(true)); await W(500); const n = await searches(); await ev(() => map.panBy([0, map.getSize().y * 1.5])); await W(2000); ck("Details then Map button then pan loads trails", (await searches()) > n, (await searches()) - n); await pg.waitForFunction(() => !R.searching, null, { timeout: 150000 }).catch(() => {}); await ev(() => { closeTrail(); mapFull(false); }); });
+await step("Details then Map button then pan loads trails", async () => { await ev(id => openTrail(id), mtsi); await W(800); await ev(() => mapFull(true)); await W(500); const n = await searches(); await ev(() => map.panBy([0, map.getSize().y * 3])); await W(2000); const cov = await ev(() => R.cov.some(c => bbHolds(c, queryBox()))); ck("Details then Map button then pan loads trails", (await searches()) > n || cov, { searches: (await searches()) - n, alreadyCovered: cov }); await pg.waitForFunction(() => !R.searching, null, { timeout: 150000 }).catch(() => {}); await ev(() => { closeTrail(); mapFull(false); }); });
 
 // AllTrails-only card opens in app
 await step("AllTrails-only card opens in Switchback", async () => { const r = await ev(() => { const c = document.querySelector("[data-at]"); return c ? c.dataset.at : null; });
