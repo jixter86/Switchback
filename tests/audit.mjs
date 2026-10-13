@@ -3,7 +3,7 @@ import { chromium } from "playwright";
 const url = process.env.SITE || "https://jixter86.github.io/Switchback/";
 const res = []; const ck = (name, ok, info = "") => { res.push([ok ? "PASS" : "FAIL", name, info]); console.log(ok ? "PASS" : "FAIL", name, typeof info === "string" ? info : JSON.stringify(info)); };
 const W = ms => new Promise(r => setTimeout(r, ms));
-for (let i = 0; i < 40; i++) { const r = await fetch(url + "?" + Date.now()); if (r.ok && (await r.text()).includes("conditionsHtml")) { console.log("new build live"); break; } await W(10000); }
+for (let i = 0; i < 40; i++) { const r = await fetch(url + "?" + Date.now()); if (r.ok && (await r.text()).includes("listRefresh")) { console.log("new build live"); break; } await W(10000); }
 const b = await chromium.launch();
 const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: false, geolocation: { latitude: 47.4957, longitude: -121.7868 }, permissions: ["geolocation"] });
 const pg = await ctx.newPage(); const errs = [];
@@ -46,16 +46,27 @@ await step("Map button full-screen", async () => { await pg.click("#mapBtn"); aw
 
 // THE BUG: search this area after the user pans, also while a preview card is open
 const drag = async () => { await pg.mouse.move(200, 300); await pg.mouse.down(); await pg.mouse.move(120, 360, { steps: 8 }); await pg.mouse.up(); await W(700); };
-const area = () => ev(() => getComputedStyle(document.querySelector("#areaBtn")).display !== "none");
-await step("Search this area after panning", async () => { await drag(); ck("Search this area after panning", await area()); });
+// Searches are counted by wrapping the app's own searchArea (a global function, so autoSearch calls the wrapper).
+await ev(() => { window.__sa = 0; const f = window.searchArea; window.searchArea = (...a) => { window.__sa++; return f(...a); }; });
+const searches = () => ev(() => window.__sa);
+await step("List shows only trails on screen", async () => { const r = await ev(() => { const b = seenBounds(), ids = [...document.querySelectorAll(".card[data-id]")].map(c => c.dataset.id);
+    return { n: ids.length, all: R.trails.length, off: ids.filter(id => !onScreen(R.byId[id], b)).length }; });
+  ck("List shows only trails on screen", r.n > 0 && r.off === 0, r); });
+await step("List follows zoom", async () => { const a = await ev(() => document.querySelectorAll(".card[data-id]").length); await ev(() => map.setZoom(map.getZoom() + 2)); await W(1500);
+  const b = await ev(() => document.querySelectorAll(".card[data-id]").length); await ev(() => map.setZoom(map.getZoom() - 2)); await W(1500);
+  ck("List follows zoom", b < a, [a, b]); });
+await step("Trails load by themselves after moving the map", async () => { const n = await searches(); await ev(() => map.panBy([map.getSize().x * 1.5, 0])); await W(1500);
+  await pg.waitForFunction(() => !R.searching, null, { timeout: 150000 }).catch(() => {});
+  const r = await ev(() => ({ covered: R.cov.some(c => bbHolds(c, queryBox())), err: R.searchErr })); ck("Trails load by themselves after moving the map", (await searches()) > n && (r.covered || !!r.err), { ...r, searches: (await searches()) - n }); });
+await step("Moving back over a searched area doesn't search again", async () => { await ev(() => map.panBy([-map.getSize().x * 1.5, 0])); await W(2000); const n = await searches();
+  await ev(() => map.panBy([map.getSize().x * 1.5, 0])); await W(2000); ck("Moving back over a searched area doesn't search again", (await searches()) === n, (await searches()) - n); });
 await step("Preview card opens from map", async () => { await ev(() => previewTrail(visibleTrails()[0].id)); await W(1500);
   ck("Preview card opens from map", await ev(() => !document.querySelector("#pv").hidden && !!document.querySelector("#pv .pvthumb, #pv .tmap")), await ev(() => document.querySelector("#pv").innerText.slice(0, 120))); });
 await step("Preview zoom stays out", async () => ck("Preview zoom stays out", (await ev(() => map.getZoom())) <= 13, await ev(() => map.getZoom())));
-await step("Search this area while preview open", async () => { await drag(); ck("Search this area while preview open", await area()); });
 await step("Preview browse next", async () => { const a = await ev(() => R.pv); await ev(() => pvStep(1)); await W(1200); const z = await ev(() => R.pv); ck("Preview browse next", a !== z && !!z, [a, z]); });
-await step("Area button not shown by preview's own move", async () => { await ev(() => document.querySelector("#areaBtn").classList.remove("show")); await ev(() => pvStep(1)); await W(1500); ck("Area button not shown by preview's own move", !(await area())); });
+await step("Preview's own move doesn't search", async () => { const n = await searches(); await ev(() => pvStep(1)); await W(2000); ck("Preview's own move doesn't search", (await searches()) === n, (await searches()) - n); });
 await step("Map tap closes preview", async () => { await pg.mouse.click(200, 250); await W(500); ck("Map tap closes preview", await ev(() => !R.pv)); });
-await step("Search this area actually searches", async () => { await drag(); await pg.click("#areaBtn"); await W(300); await pg.waitForFunction(() => !R.searching, null, { timeout: 150000 }).catch(() => {}); ck("Search this area actually searches", await ev(() => R.trails.length > 0), await ev(() => R.trails.length)); });
+await step("Search actually finds trails", async () => { await drag(); await ev(() => searchArea()); await W(300); await pg.waitForFunction(() => !R.searching, null, { timeout: 150000 }).catch(() => {}); ck("Search actually finds trails", await ev(() => R.trails.length > 0), await ev(() => R.trails.length)); });
 
 // Details page
 await ev(() => { map.setView([47.49, -121.77], 13); }); await ev(() => searchArea()); await W(500);
@@ -67,8 +78,8 @@ await step("Trail conditions links", async () => { await pg.waitForFunction(() =
   const r = await ev(() => [...document.querySelectorAll(".condlinks a")].map(a => a.textContent.trim() + " " + a.href.slice(0, 60)));
   ck("Trail conditions links", r.some(x => /wta\.org/.test(x)) && r.some(x => /Alerts and closures/.test(x)), r); });
 await step("Save trail from details", async () => { await ev(() => { const c = document.querySelector("[data-list]"); c.checked = true; c.dispatchEvent(new Event("change", { bubbles: true })); }); await W(500); ck("Save trail from details", await ev(id => !!S.saved[id], mtsi)); });
-await step("Area button hidden on details, back returns to preview", async () => { const hid = !(await area()); await pg.click("#back"); await W(800); ck("Area button hidden on details, back returns to preview", hid && (await ev(() => !!R.pv)), await ev(() => R.pv)); });
-await step("Details then Map button then pan shows Search this area", async () => { await ev(id => openTrail(id), mtsi); await W(800); await ev(() => mapFull(true)); await W(500); await drag(); ck("Details then Map button then pan shows Search this area", await area()); await ev(() => { closeTrail(); mapFull(false); }); });
+await step("Back from details returns to preview", async () => { await pg.click("#back"); await W(800); ck("Back from details returns to preview", await ev(() => !!R.pv), await ev(() => R.pv)); });
+await step("Details then Map button then pan loads trails", async () => { await ev(id => openTrail(id), mtsi); await W(800); await ev(() => mapFull(true)); await W(500); const n = await searches(); await ev(() => map.panBy([0, map.getSize().y * 1.5])); await W(2000); ck("Details then Map button then pan loads trails", (await searches()) > n, (await searches()) - n); await pg.waitForFunction(() => !R.searching, null, { timeout: 150000 }).catch(() => {}); await ev(() => { closeTrail(); mapFull(false); }); });
 
 // AllTrails-only card opens in app
 await step("AllTrails-only card opens in Switchback", async () => { const r = await ev(() => { const c = document.querySelector("[data-at]"); return c ? c.dataset.at : null; });
