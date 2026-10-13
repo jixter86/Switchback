@@ -933,7 +933,7 @@ body.pving .leaflet-bottom{bottom:calc(var(--pvh,170px) + 14px)}
 @media (min-width:900px){.nav{left:422px;right:auto;width:400px}}
 .me2{pointer-events:none}
 .me2 .medot{position:absolute;left:24px;top:24px;width:16px;height:16px;border-radius:50%;background:#2b7bf3;border:3px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.15),0 1px 4px rgba(0,0,0,.35);box-sizing:border-box}
-.me2 .mecone{position:absolute;left:0;top:0;width:64px;height:64px;border-radius:50%;background:conic-gradient(from -28deg,transparent 0deg,rgba(43,123,243,.75) 6deg,rgba(43,123,243,.75) 50deg,transparent 56deg,transparent 360deg);-webkit-mask:radial-gradient(circle,#000 0 6px,rgba(0,0,0,.85) 9px,transparent 32px);mask:radial-gradient(circle,#000 0 6px,rgba(0,0,0,.85) 9px,transparent 32px);display:none}
+.me2 .mecone{position:absolute;left:0;top:0;width:64px;height:64px;border-radius:50%;background:conic-gradient(from -28deg,transparent 0deg,rgba(43,123,243,.75) 6deg,rgba(43,123,243,.75) 50deg,transparent 56deg,transparent 360deg);-webkit-mask:radial-gradient(circle,#000 0 6px,rgba(0,0,0,.85) 9px,transparent 32px);mask:radial-gradient(circle,#000 0 6px,rgba(0,0,0,.85) 9px,transparent 32px);display:none;transition:transform .25s linear}
 .iconbtn.half{color:#2b7bf3}
 .iconbtn.on#locBtn{background:#2b7bf3;color:#fff}
 .me{background:#2b7bf3;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 6px rgba(43,123,243,.25)}
@@ -1034,7 +1034,7 @@ if (/^(hike|bike|all)$/.test(savedAct||"")) R.filt.act=savedAct;
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
-let toastT; function toast(t){ const e=$("#toast"); e.textContent=t; e.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>e.classList.remove("show"), 3200); }
+let toastT; function toast(t, ms){ const e=$("#toast"); e.textContent=t; e.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>e.classList.remove("show"), 3200); }
 
 /* ================= geometry ================= */
 const RAD = Math.PI/180;
@@ -1365,44 +1365,80 @@ function centerVisible(ll, zoom, animate){
   const pt=map.project(ll, z).add([dx, dy]);
   map.setView(map.unproject(pt, z), z, { animate:!!animate }); }
 function meState(){ const b=$("#locBtn"); b.classList.toggle("on", meWatch!==null && meFollow); b.classList.toggle("half", meWatch!==null && !meFollow); }
-function setHeading(h){ meHead=h; requestAnimationFrame(()=>document.querySelectorAll(".mecone").forEach(el=>{ el.style.display=h==null?"none":"block"; if (h!=null) el.style.transform=`rotate(${h}deg)`; })); }
+/* The compass is noisy: ease toward each new reading (shortest way round) and skip changes under 2°. */
+let headShown=null, headRaf=0;
+function setHeading(h){
+  if (h==null){ meHead=null; headShown=null; }
+  else if (meHead==null) meHead=h;
+  else { const d=((h-meHead)%360+540)%360-180; meHead+=d*0.2; }
+  if (headRaf) return; headRaf=requestAnimationFrame(()=>{ headRaf=0;
+    if (meHead!=null && headShown!=null && Math.abs(meHead-headShown)<2) return; headShown=meHead;
+    document.querySelectorAll(".mecone").forEach(el=>{ el.style.display=meHead==null?"none":"block"; if (meHead!=null) el.style.transform=`rotate(${meHead}deg)`; }); }); }
+/* GPS smoothing: a small Kalman filter weighs each fix by its accuracy, drops fixes that are much worse than
+   recent ones, and the dot glides to its new spot instead of jumping. Shared by the map dot and Navigate. */
+function geoFilter(f, p){
+  const c=p.coords, acc=Math.max(c.accuracy||30, 3), t=p.timestamp||Date.now();
+  if (f.v!=null && acc>Math.max(25, 3*Math.sqrt(f.v)) && t-f.t<15000) return null; // a stray poor fix
+  if (f.v==null || acc>500){ Object.assign(f, { lat:c.latitude, lng:c.longitude, v:acc*acc, t }); }
+  else { const dt=Math.max(0,(t-f.t)/1000), q=Math.max(2.5, c.speed>0?c.speed*1.5:0); // walking pace of uncertainty per second
+    f.v+=dt*q*q; const k=f.v/(f.v+acc*acc);
+    f.lat+=k*(c.latitude-f.lat); f.lng+=k*(c.longitude-f.lng); f.v*=(1-k); f.t=t; }
+  return { ll:[f.lat,f.lng], acc:Math.min(acc, Math.max(3, Math.sqrt(f.v)*1.5)) }; }
+function glide(m, circ, ll, acc){ const from=m.getLatLng(), t0=performance.now(), d=hav([from.lat,from.lng], ll);
+  if (circ) circ.setRadius(acc);
+  cancelAnimationFrame(m._gl); if (d<0.5) return; if (d>200){ m.setLatLng(ll); circ?.setLatLng(ll); return; }
+  const step=now=>{ const k=Math.min(1,(now-t0)/600), e=k*(2-k), p=[from.lat+(ll[0]-from.lat)*e, from.lng+(ll[1]-from.lng)*e];
+    m.setLatLng(p); circ?.setLatLng(p); if (k<1) m._gl=requestAnimationFrame(step); };
+  m._gl=requestAnimationFrame(step); }
+/* While following, only re-center once the dot has drifted a few pixels, so the map itself doesn't shake. */
+function followTo(ll, zoom, animate, key){ const z=zoom??map.getZoom(), mpp=40075016*Math.cos(ll[0]*Math.PI/180)/Math.pow(2,z+8);
+  if (R[key] && R[key].z===z && hav(R[key].ll, ll)<mpp*12) return;
+  R[key]={ ll, z }; centerVisible(ll, z, animate); }
+const meF={};
 function onOrient(e){ let h=e.webkitCompassHeading!=null ? e.webkitCompassHeading : (e.absolute&&e.alpha!=null ? 360-e.alpha : null);
   if (h==null) return; h=(h+(screen.orientation?.angle||window.orientation||0)+360)%360; setHeading(h); }
 let orientOn=false;
-async function startCompass(){ if (orientOn) return;
-  try { if (typeof DeviceOrientationEvent!=="undefined" && DeviceOrientationEvent.requestPermission){ if (await DeviceOrientationEvent.requestPermission()!=="granted") return; } } catch(e){ return; }
+let compassAsked=false;
+async function startCompass(loud){ if (orientOn) return;
+  try { if (typeof DeviceOrientationEvent!=="undefined" && DeviceOrientationEvent.requestPermission){ compassAsked=true;
+      if (await DeviceOrientationEvent.requestPermission()!=="granted"){ if (loud) toast("Compass access is off, so the dot can't show which way you face. Quit and reopen Safari to be asked again."); return; } } }
+  catch(e){ return; }
   orientOn=true; addEventListener("deviceorientationabsolute", onOrient); addEventListener("deviceorientation", onOrient); }
 function meStart(follow){
   if (!navigator.geolocation){ toast("This browser can't share your location."); return; }
   meFollow=follow; if (meWatch!==null){ meState(); return; }
   meWatch=navigator.geolocation.watchPosition(p=>{
-    const ll=[p.coords.latitude,p.coords.longitude], first=!meLast; meLast=ll;
+    const g=geoFilter(meF, p); if (!g) return;
+    const ll=g.ll, first=!meLast; meLast=ll;
     if (!meMarker){ meMarker=L.marker(ll, { icon:meIcon(), interactive:false, zIndexOffset:1000, keyboard:false }).addTo(map); setHeading(meHead); }
-    else meMarker.setLatLng(ll);
-    if (!meAcc) meAcc=L.circle(ll, { radius:p.coords.accuracy||0, color:"#2b7bf3", weight:1, opacity:.4, fillOpacity:.1, interactive:false }).addTo(map);
-    else meAcc.setLatLng(ll).setRadius(p.coords.accuracy||0);
-    if (meHead==null && p.coords.heading!=null && !isNaN(p.coords.heading) && p.coords.speed>0.5) setHeading(p.coords.heading); // fall back to travel direction
-    if (meFollow && !R.nav) centerVisible(ll, first ? Math.max(map.getZoom(),15) : map.getZoom(), !first);
+    if (!meAcc) meAcc=L.circle(ll, { radius:g.acc, color:"#2b7bf3", weight:1, opacity:.4, fillOpacity:.1, interactive:false }).addTo(map);
+    if (!first) glide(meMarker, meAcc, ll, g.acc);
+    if (!orientOn && p.coords.heading!=null && !isNaN(p.coords.heading) && p.coords.speed>0.5) setHeading(p.coords.heading); // fall back to travel direction
+    if (meFollow && !R.nav){ if (first) R.meC=null; followTo(ll, first ? Math.max(map.getZoom(),15) : map.getZoom(), !first, "meC"); }
     if (!S.locOn){ S.locOn=true; save(); }
-  }, e=>{ if (e.code===1){ toast("Location is turned off for this site. Allow it in your browser's settings."); S.locOn=false; save(); meStop(); } }, { enableHighAccuracy:true, maximumAge:5000 });
+  }, e=>{ if (e.code===1){ toast("Location is turned off for this site. Allow it in your browser's settings."); S.locOn=false; save(); meStop(); } }, { enableHighAccuracy:true, maximumAge:1000 });
   meState();
 }
-function meStop(){ if (meWatch!==null) navigator.geolocation.clearWatch(meWatch); meWatch=null; meFollow=false; meLast=null;
+function meStop(){ if (meWatch!==null) navigator.geolocation.clearWatch(meWatch); meWatch=null; meFollow=false; meLast=null; for (const k in meF) delete meF[k];
   [meMarker, meAcc].forEach(l=>l&&map.removeLayer(l)); meMarker=meAcc=null; meState(); }
-$("#locBtn").onclick=()=>{ startCompass();
+$("#locBtn").onclick=()=>{ startCompass(true);
   if (meWatch!==null && meFollow){ meFollow=false; meState(); return; } // dot stays; just stop following
-  meStart(true); if (meLast) centerVisible(meLast, Math.max(map.getZoom(),15), true); };
+  meStart(true); if (meLast){ R.meC={ ll:meLast, z:Math.max(map.getZoom(),15) }; centerVisible(meLast, Math.max(map.getZoom(),15), true); } };
 map.on("dragstart", ()=>{ if (meFollow){ meFollow=false; meState(); } });
-/* Like Google Maps, show and center on your location at start when the browser already allows it. */
-/* The blue dot stays on whenever location is allowed: start it at load if the browser says granted, or if it worked here before. */
-const meBoot=follow=>{ if (meWatch!==null) return; meStart(follow);
-  if (typeof DeviceOrientationEvent!=="undefined" && DeviceOrientationEvent.requestPermission) document.addEventListener("click", startCompass, { once:true });
-  else startCompass(); };
-if (S.locOn) meBoot(!location.hash.startsWith("#import="));
+/* Like Google Maps: show and follow your location from the start, asking for permission automatically.
+   iPhone only lets a page ask for the compass from a tap, so the first tap anywhere asks for it. */
+const needsCompassTap=typeof DeviceOrientationEvent!=="undefined" && !!DeviceOrientationEvent.requestPermission;
+function compassOnFirstTap(){ if (orientOn) return; if (!needsCompassTap){ startCompass(); return; }
+  const go=()=>{ ["touchend","click"].forEach(n=>document.removeEventListener(n, go, true)); startCompass(); };
+  ["touchend","click"].forEach(n=>document.addEventListener(n, go, true)); }
+const meBoot=follow=>{ if (meWatch===null) meStart(follow); compassOnFirstTap(); };
+function locDenied(){ toast("Location is blocked for this site. On iPhone: Settings → Privacy & Security → Location Services → Safari Websites → While Using the App, then reload. In Chrome: tap the icon left of the address and allow Location.", 9000); }
+if (!location.hash.startsWith("#import=")){
+  if (navigator.permissions?.query) navigator.permissions.query({ name:"geolocation" }).then(st=>{
+      if (st.state==="denied"){ S.locOn=false; save(); locDenied(); } else meBoot(true);
+      st.onchange=()=>{ if (st.state==="granted" && meWatch===null) meBoot(true); }; }).catch(()=>meBoot(true));
+  else meBoot(true); }
 document.addEventListener("visibilitychange", ()=>{ if (document.visibilityState==="visible" && S.locOn && meWatch===null) meBoot(false); });
-navigator.permissions?.query({ name:"geolocation" }).then(st=>{ if (st.state==="granted" && meWatch===null && !location.hash.startsWith("#import=")){ meStart(true);
-  if (typeof DeviceOrientationEvent!=="undefined" && DeviceOrientationEvent.requestPermission) document.addEventListener("click", startCompass, { once:true }); // iPhone asks on the first tap
-  else startCompass(); } }).catch(()=>{});
 
 /* ================= panel ================= */
 const sizes=["peek","half","full"];
@@ -2267,15 +2303,16 @@ function stopNav(silent){ const nv=R.nav; if (!nv) return;
   try { nv.wake?.release(); } catch(e){} map.off("dragstart", navUnfollow); R.nav=null; document.body.classList.remove("navving"); navDraw(); if (!silent) render(); }
 function navFix(p){ const nv=R.nav; if (!nv) return;
   const ll=[p.coords.latitude, p.coords.longitude], acc=p.coords.accuracy||0, first=!nv.last;
-  nv.last={ ll, acc }; nv.err=null;
+  const g=geoFilter(nv.f||(nv.f={}), p); if (!g) return; ll[0]=g.ll[0]; ll[1]=g.ll[1];
+  nv.last={ ll, acc:g.acc }; nv.err=null;
   if (!map.hasLayer(nv.me)){ nv.acc.addTo(map); nv.me.addTo(map); setHeading(meHead); }
-  if (meHead==null && p.coords.heading!=null && !isNaN(p.coords.heading) && p.coords.speed>0.5) setHeading(p.coords.heading);
-  nv.me.setLatLng(ll); nv.acc.setLatLng(ll).setRadius(acc);
+  if (!orientOn && p.coords.heading!=null && !isNaN(p.coords.heading) && p.coords.speed>0.5) setHeading(p.coords.heading);
+  if (first){ nv.me.setLatLng(ll); nv.acc.setLatLng(ll).setRadius(g.acc); } else glide(nv.me, nv.acc, ll, g.acc);
   nv.s=snapTo(nv, ll);
-  const off=nv.s.off > Math.max(60, acc); // allow for GPS error before calling it off trail
+  const off=nv.s.off > Math.max(60, g.acc); // allow for GPS error before calling it off trail
   if (off && !nv.isOff) navigator.vibrate?.([250,120,250]);
   nv.isOff=off;
-  if (nv.follow) centerVisible(ll, first ? 16 : map.getZoom(), !first);
+  if (nv.follow){ if (first) R.navC=null; followTo(ll, first ? 16 : map.getZoom(), !first, "navC"); }
   navDraw();
 }
 function navDraw(){
@@ -2296,7 +2333,7 @@ function navDraw(){
   e.innerHTML=`<div class="navtop"><span>Navigating <b>${esc(t.name)}</b></span><span>${nv.follow?"":`<button class="btn" id="navCenter">Recenter</button> `}<button class="btn" id="navEnd">End</button></span></div>
     <div class="navmain${nv.isOff?" off":""}">${esc(main)}</div>${sub.length?`<div class="navsub">${sub.map(esc).join(" · ")}</div>`:""}`;
   $("#navEnd").onclick=()=>stopNav();
-  $("#navCenter")&&($("#navCenter").onclick=()=>{ nv.follow=true; if (nv.last) map.setView(nv.last.ll, Math.max(map.getZoom(),15)); navDraw(); });
+  $("#navCenter")&&($("#navCenter").onclick=()=>{ nv.follow=true; R.navC=null; if (nv.last) map.setView(nv.last.ll, Math.max(map.getZoom(),15)); navDraw(); });
 }
 /* With no signal, show the most detailed saved tiles enlarged instead of blank squares when zoomed past them. */
 function offlineZoom(){ const offline=navigator.onLine===false;
