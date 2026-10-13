@@ -1,0 +1,5 @@
+for u in "https://www.wta.org/go-outside/hikes?title=Mount%20Si" "https://www.wta.org/go-hiking/hikes?title=Mount%20Si" "https://www.wta.org/go-outside/hikes/hike_search?title=Mount%20Si" "https://www.fs.usda.gov/mbs/alerts" "https://www.fs.usda.gov/r06/mbs/alerts" "https://www.fs.usda.gov/r06/mbs/alerts-notices" "https://www.fs.usda.gov/r06/mbs" "https://www.nps.gov/mora/planyourvisit/conditions.htm" "https://dlnr.hawaii.gov/dsp/parks/oahu/diamond-head-state-monument/"; do
+  echo "$u -> $(curl -s -L -o /tmp/p.html -w '%{http_code} %{url_effective}' -m 20 -A 'Mozilla/5.0' "$u") $(grep -o '<title>[^<]*' /tmp/p.html | head -1)"; done
+curl -s -A 'Mozilla/5.0' -L "https://www.wta.org/go-outside/hikes?title=Mount%20Si" | grep -o 'href="https://www.wta.org/go-hiking/hikes/[^"]*"' | head -5
+for ll in "47.4880,-121.7234" "21.2626,-157.8059" "47.4325,-121.7765"; do
+curl -s -m 60 -X POST --data-urlencode "data=[out:json][timeout:25];is_in(${ll})->.a;(area.a[\"boundary\"~\"^(protected_area|national_park)\$\"];area.a[\"leisure\"~\"^(nature_reserve|park)\$\"][\"name\"];);out tags;" https://overpass-api.de/api/interpreter | head -c 2500; echo; done
