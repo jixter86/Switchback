@@ -3,7 +3,7 @@ import { chromium } from "playwright";
 const url = process.env.SITE || "https://jixter86.github.io/Switchback/";
 const res = []; const ck = (name, ok, info = "") => { res.push([ok ? "PASS" : "FAIL", name, info]); console.log(ok ? "PASS" : "FAIL", name, typeof info === "string" ? info : JSON.stringify(info)); };
 const W = ms => new Promise(r => setTimeout(r, ms));
-for (let i = 0; i < 40; i++) { const r = await fetch(url + "?" + Date.now()); if (r.ok && (await r.text()).includes("R.flying")) { console.log("new build live"); break; } await W(10000); }
+for (let i = 0; i < 40; i++) { const r = await fetch(url + "?" + Date.now()); if (r.ok && (await r.text()).includes("atIndex")) { console.log("new build live"); break; } await W(10000); }
 const b = await chromium.launch();
 const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: false, geolocation: { latitude: 47.4957, longitude: -121.7868 }, permissions: ["geolocation"] });
 const pg = await ctx.newPage(); const errs = [];
@@ -61,8 +61,8 @@ await step("Search this area actually searches", async () => { await drag(); awa
 await ev(() => { map.setView([47.49, -121.77], 13); }); await ev(() => searchArea()); await W(500);
 const mtsi = await ev(() => (R.trails.find(t => /little si/i.test(t.name)) || visibleTrails()[0]).id);
 await step("Details page content", async () => { await ev(id => previewTrail(id), mtsi); await W(800); await pg.click("#pv .pvgo, #pv"); await W(9000);
-  const r = await ev(() => { const tx = document.querySelector("#panel").innerText; return { sel: R.sel?.name, map: !!document.querySelector("#pvSlot .leaflet-container, #pvSlot canvas, #pvSlot svg, #pvSlot img, #pvSlot div"), elev: /Elevation profile/.test(tx), wx: /Weather at the trailhead/.test(tx), at: /AllTrails/.test(tx), nav: !!document.querySelector("#navBtn"), photos: document.querySelectorAll("#panel img").length, hl: /Highlights|Along the trail/i.test(tx) }; });
-  ck("Details page content", r.sel && r.map && r.wx && r.at && r.nav, r); });
+  const r = await ev(() => { const tx = document.querySelector("#panel").innerText; return { sel: R.sel?.name, map: !!document.querySelector("#pvSlot .leaflet-container, #pvSlot canvas, #pvSlot svg, #pvSlot img, #pvSlot div"), elev: /Elevation profile/i.test(tx), wx: /Weather at the trailhead/i.test(tx), at: /AllTrails/.test(tx), nav: !!document.querySelector("#navBtn"), photos: document.querySelectorAll("#panel img").length, hl: /Highlights|Along the trail/i.test(tx) }; });
+  ck("Details page content", r.sel && r.map && r.wx && r.at && r.nav && r.elev, r); });
 await step("Save trail from details", async () => { await ev(() => { const c = document.querySelector("[data-list]"); c.checked = true; c.dispatchEvent(new Event("change", { bubbles: true })); }); await W(500); ck("Save trail from details", await ev(id => !!S.saved[id], mtsi)); });
 await step("Area button hidden on details, back returns to preview", async () => { const hid = !(await area()); await pg.click("#back"); await W(800); ck("Area button hidden on details, back returns to preview", hid && (await ev(() => !!R.pv)), await ev(() => R.pv)); });
 await step("Details then Map button then pan shows Search this area", async () => { await ev(id => openTrail(id), mtsi); await W(800); await ev(() => mapFull(true)); await W(500); await drag(); ck("Details then Map button then pan shows Search this area", await area()); await ev(() => { closeTrail(); mapFull(false); }); });
@@ -70,7 +70,7 @@ await step("Details then Map button then pan shows Search this area", async () =
 // AllTrails-only card opens in app
 await step("AllTrails-only card opens in Switchback", async () => { const r = await ev(() => { const c = document.querySelector("[data-at]"); return c ? c.dataset.at : null; });
   if (!r) { ck("AllTrails-only card opens in Switchback", true, "no unmatched AllTrails cards in this area"); return; }
-  await ev(id => openAT(id), r); await W(25000); ck("AllTrails-only card opens in Switchback", await ev(() => !!(R.pv || R.sel)), await ev(() => document.querySelector("#toast")?.innerText)); await ev(() => { closePreview(); closeTrail(); }); });
+  await ev(id => openAT(+id), r); await W(25000); ck("AllTrails-only card opens in Switchback", await ev(() => !!(R.pv || R.sel)), await ev(() => document.querySelector("#toast")?.innerText)); await ev(() => { closePreview(); closeTrail(); }); });
 
 // Filters + trailheads
 await step("Map filters in Settings", async () => { await pg.click("#setBtn"); await W(400); const n = await ev(() => document.querySelectorAll("#mapFilt [data-mf]").length); const before = await ev(() => visibleTrails().length);
@@ -91,7 +91,7 @@ await step("Saved weather board", async () => { await ev(() => setTab("saved"));
   ck("Saved weather board (week + hourly, all trails, stats)", r.grids >= 2 && r.rows >= 1 && r.hourRows === r.rows && r.days >= 7, r);
   const d2 = await ev(async () => { const btns = [...document.querySelectorAll(".wxc[data-day]")]; const days = [...new Set(btns.map(b => b.dataset.day))]; btns.find(b => b.dataset.day === days[2]).click(); await new Promise(r => setTimeout(r, 400)); return { want: days[2], got: R.wxDay }; });
   ck("Pick a day for hourly weather", d2.want === d2.got, d2);
-  const st = await ev(async () => { for (const t of Object.values(S.saved)) if (t.hwx) t.hwx.at = Date.now() - 2 * 3600e3; const was = Math.min(...Object.values(S.saved).filter(t => t.hwx).map(t => t.hwx.at)); refreshStaleWeather(); await new Promise(r => setTimeout(r, 8000)); return { was, now: Math.min(...Object.values(S.saved).filter(t => t.hwx).map(t => t.hwx.at)) }; });
+  const st = await ev(async () => { for (const t of Object.values(S.saved)) if (t.hwx) t.hwx.at = Date.now() - 2 * 3600e3; R.hwxTry = 0; const was = Math.min(...Object.values(S.saved).filter(t => t.hwx).map(t => t.hwx.at)); refreshStaleWeather(); await new Promise(r => setTimeout(r, 8000)); return { was, now: Math.min(...Object.values(S.saved).filter(t => t.hwx).map(t => t.hwx.at)) }; });
   ck("Stale weather refreshes", st.now > st.was, st); await ev(() => setTab("explore")); });
 
 ck("No page errors", errs.length === 0, errs);
