@@ -1378,12 +1378,27 @@ function setHeading(h){
    recent ones, and the dot glides to its new spot instead of jumping. Shared by the map dot and Navigate. */
 function geoFilter(f, p){
   const c=p.coords, acc=Math.max(c.accuracy||30, 3), t=p.timestamp||Date.now();
-  if (f.v!=null && acc>Math.max(25, 3*Math.sqrt(f.v)) && t-f.t<15000) return null; // a stray poor fix
+  if (f.v!=null && acc>Math.max(50, 4*Math.sqrt(f.v)) && t-f.t<5000) return null; // a stray poor fix
   if (f.v==null || acc>500){ Object.assign(f, { lat:c.latitude, lng:c.longitude, v:acc*acc, t }); }
-  else { const dt=Math.max(0,(t-f.t)/1000), q=Math.max(2.5, c.speed>0?c.speed*1.5:0); // walking pace of uncertainty per second
+  else { const dt=Math.max(0,(t-f.t)/1000), q=c.speed>0.7 ? Math.max(4, c.speed*3) : 2.5; // walking pace of uncertainty per second
     f.v+=dt*q*q; const k=f.v/(f.v+acc*acc);
     f.lat+=k*(c.latitude-f.lat); f.lng+=k*(c.longitude-f.lng); f.v*=(1-k); f.t=t; }
   return { ll:[f.lat,f.lng], acc:Math.min(acc, Math.max(3, Math.sqrt(f.v)*1.5)) }; }
+/* Like Google Maps snapping to roads: when you're within GPS error of a trail on the map, draw the dot on the trail. */
+function nearOnSegs(segs, ll){ const kx=Math.cos(ll[0]*RAD)*111320, ky=111320; let best={ off:Infinity, p:null };
+  for (const sg of segs) for (let i=1;i<sg.length;i++){ const a=sg[i-1], b=sg[i];
+    const ax=(a[1]-ll[1])*kx, ay=(a[0]-ll[0])*ky, dx=(b[1]-a[1])*kx, dy=(b[0]-a[0])*ky, L2=dx*dx+dy*dy;
+    const f=L2 ? Math.max(0,Math.min(1,-(ax*dx+ay*dy)/L2)) : 0, off=Math.hypot(ax+f*dx, ay+f*dy);
+    if (off<best.off) best={ off, p:[a[0]+f*(b[0]-a[0]), a[1]+f*(b[1]-a[1])] }; }
+  return best; }
+let snapOn=false;
+function trailSnap(ll, acc){
+  const lim=Math.min(25, Math.max(10, acc))*(snapOn?1.5:1), dLat=lim/111320, dLng=lim/(111320*Math.cos(ll[0]*RAD));
+  const cands=new Set([R.nav?.t, R.sel, R.pv&&pvTrail(R.pv), ...(R.tab==="explore"?visibleTrails():[]), ...Object.values(S.saved)].filter(t=>t&&t.segs));
+  let best={ off:Infinity, p:null };
+  for (const t of cands){ const b=t.bbox; if (b && (ll[0]<b[0]-dLat||ll[0]>b[2]+dLat||ll[1]<b[1]-dLng||ll[1]>b[3]+dLng)) continue;
+    const r=nearOnSegs(t.segs, ll); if (r.off<best.off) best=r; }
+  snapOn=best.off<=lim; return snapOn ? best.p : ll; }
 function glide(m, circ, ll, acc){ const from=m.getLatLng(), t0=performance.now(), d=hav([from.lat,from.lng], ll);
   if (circ) circ.setRadius(acc);
   cancelAnimationFrame(m._gl); if (d<0.5) return; if (d>200){ m.setLatLng(ll); circ?.setLatLng(ll); return; }
@@ -1412,7 +1427,7 @@ function meStart(follow){
     const ll=g.ll, first=!meLast; meLast=ll;
     if (!meMarker){ meMarker=L.marker(ll, { icon:meIcon(), interactive:false, zIndexOffset:1000, keyboard:false }).addTo(map); setHeading(meHead); }
     if (!meAcc) meAcc=L.circle(ll, { radius:g.acc, color:"#2b7bf3", weight:1, opacity:.4, fillOpacity:.1, interactive:false }).addTo(map);
-    if (!first) glide(meMarker, meAcc, ll, g.acc);
+    if (!first) glide(meMarker, meAcc, trailSnap(ll, g.acc), g.acc);
     if (!orientOn && p.coords.heading!=null && !isNaN(p.coords.heading) && p.coords.speed>0.5) setHeading(p.coords.heading); // fall back to travel direction
     if (meFollow && !R.nav){ if (first) R.meC=null; followTo(ll, first ? Math.max(map.getZoom(),15) : map.getZoom(), !first, "meC"); }
     if (!S.locOn){ S.locOn=true; save(); }
@@ -2307,7 +2322,8 @@ function navFix(p){ const nv=R.nav; if (!nv) return;
   nv.last={ ll, acc:g.acc }; nv.err=null;
   if (!map.hasLayer(nv.me)){ nv.acc.addTo(map); nv.me.addTo(map); setHeading(meHead); }
   if (!orientOn && p.coords.heading!=null && !isNaN(p.coords.heading) && p.coords.speed>0.5) setHeading(p.coords.heading);
-  if (first){ nv.me.setLatLng(ll); nv.acc.setLatLng(ll).setRadius(g.acc); } else glide(nv.me, nv.acc, ll, g.acc);
+  const shown=trailSnap(ll, g.acc);
+  if (first){ nv.me.setLatLng(shown); nv.acc.setLatLng(shown).setRadius(g.acc); } else glide(nv.me, nv.acc, shown, g.acc);
   nv.s=snapTo(nv, ll);
   const off=nv.s.off > Math.max(60, g.acc); // allow for GPS error before calling it off trail
   if (off && !nv.isOff) navigator.vibrate?.([250,120,250]);
