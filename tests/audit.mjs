@@ -3,7 +3,7 @@ import { chromium } from "playwright";
 const url = process.env.SITE || "https://jixter86.github.io/Switchback/";
 const res = []; const ck = (name, ok, info = "") => { res.push([ok ? "PASS" : "FAIL", name, info]); console.log(ok ? "PASS" : "FAIL", name, typeof info === "string" ? info : JSON.stringify(info)); };
 const W = ms => new Promise(r => setTimeout(r, ms));
-for (let i = 0; i < 40; i++) { const r = await fetch(url + "?" + Date.now()); if (r.ok && (await r.text()).includes("gpsOn")) { console.log("new build live"); break; } await W(10000); }
+for (let i = 0; i < 40; i++) { const r = await fetch(url + "?" + Date.now()); if (r.ok && (await r.text()).includes("conditionsHtml")) { console.log("new build live"); break; } await W(10000); }
 const b = await chromium.launch();
 const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: false, geolocation: { latitude: 47.4957, longitude: -121.7868 }, permissions: ["geolocation"] });
 const pg = await ctx.newPage(); const errs = [];
@@ -63,6 +63,9 @@ const mtsi = await ev(() => (R.trails.find(t => /little si/i.test(t.name)) || vi
 await step("Details page content", async () => { await ev(id => previewTrail(id), mtsi); await W(800); await pg.click("#pv .pvgo, #pv"); await W(9000);
   const r = await ev(() => { const tx = document.querySelector("#panel").innerText; return { sel: R.sel?.name, map: !!document.querySelector("#pvSlot .leaflet-container, #pvSlot canvas, #pvSlot svg, #pvSlot img, #pvSlot div"), elev: /Elevation profile/i.test(tx), wx: /Weather at the trailhead/i.test(tx), at: /AllTrails/.test(tx), nav: !!document.querySelector("#navBtn"), photos: document.querySelectorAll("#panel img").length, hl: /Highlights|Along the trail/i.test(tx) }; });
   ck("Details page content", r.sel && r.map && r.wx && r.at && r.nav && r.elev, r); });
+await step("Trail conditions links", async () => { await pg.waitForFunction(() => !/Finding who manages/.test(document.querySelector("#panel").innerText), null, { timeout: 60000 }).catch(() => {});
+  const r = await ev(() => [...document.querySelectorAll(".condlinks a")].map(a => a.textContent.trim() + " " + a.href.slice(0, 60)));
+  ck("Trail conditions links", r.some(x => /wta\.org/.test(x)) && r.some(x => /Alerts and closures/.test(x)), r); });
 await step("Save trail from details", async () => { await ev(() => { const c = document.querySelector("[data-list]"); c.checked = true; c.dispatchEvent(new Event("change", { bubbles: true })); }); await W(500); ck("Save trail from details", await ev(id => !!S.saved[id], mtsi)); });
 await step("Area button hidden on details, back returns to preview", async () => { const hid = !(await area()); await pg.click("#back"); await W(800); ck("Area button hidden on details, back returns to preview", hid && (await ev(() => !!R.pv)), await ev(() => R.pv)); });
 await step("Details then Map button then pan shows Search this area", async () => { await ev(id => openTrail(id), mtsi); await W(800); await ev(() => mapFull(true)); await W(500); await drag(); ck("Details then Map button then pan shows Search this area", await area()); await ev(() => { closeTrail(); mapFull(false); }); });
@@ -94,6 +97,8 @@ await step("Saved weather board", async () => { await ev(() => setTab("saved"));
   const st = await ev(async () => { for (const t of Object.values(S.saved)) if (t.hwx) t.hwx.at = Date.now() - 2 * 3600e3; R.hwxTry = 0; const was = Math.min(...Object.values(S.saved).filter(t => t.hwx).map(t => t.hwx.at)); refreshStaleWeather(); await new Promise(r => setTimeout(r, 8000)); return { was, now: Math.min(...Object.values(S.saved).filter(t => t.hwx).map(t => t.hwx.at)) }; });
   ck("Stale weather refreshes", st.now > st.was, st); await ev(() => setTab("explore")); });
 
+await step("Sound + backup settings", async () => { await pg.click("#setBtn"); await W(300); const r = await ev(() => ({ snd: !!document.querySelector("#sndOn"), bk: !!document.querySelector("#bkSave") && !!document.querySelector("#bkLoad"), dev: typeof Device.watchPosition })); await pg.click("#sndTest"); await W(300); await pg.click("#closeSet");
+  ck("Sound + backup settings", r.snd && r.bk && r.dev === "function", r); });
 ck("No page errors", errs.length === 0, errs);
 await pg.screenshot({ path: "shots/audit.png" });
 console.log("\nSUMMARY"); for (const r of res) console.log(r[0], r[1]);
