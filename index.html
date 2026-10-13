@@ -1581,7 +1581,7 @@ var MAP_IC='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-wi
 function mapFull(on){ const b=document.body, was=b.classList.contains("mapfull"); on=!!on;
   b.classList.toggle("mapfull", on);
   const btn=$("#mapBtn"); btn.innerHTML=on?LIST_IC+"List":MAP_IC+"Map"; btn.setAttribute("aria-pressed", on); btn.setAttribute("aria-label", on?"Show list":"Full-screen map");
-  if (was!==on){ const c=map.getCenter(); setTimeout(()=>{ map.invalidateSize({ pan:false }); if (matchMedia("(min-width:900px)").matches) map.panTo(c, { animate:false }); }, 280); } }
+  if (was!==on){ const c=map.getCenter(); setTimeout(()=>{ map.invalidateSize({ pan:false }); if (matchMedia("(min-width:900px)").matches) map.panTo(c, { animate:false }); listRefresh(); }, 280); } }
 $("#mapBtn").onclick=()=>{ const on=!document.body.classList.contains("mapfull"); if (!on) closePreview(); mapFull(on); };
 mapFull(false);
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
@@ -1590,8 +1590,9 @@ function setTab(t){ R.tab=t; if (t!=="explore") $("#areaBtn").classList.remove("
 
 /* Coalesce background refreshes (climb data, weather, photos) into one redraw, keep the scroll position,
    and wait while you're typing notes so the box isn't rebuilt under you. */
-let rsT=0;
-function renderSoon(ms){ if (rsT) return; rsT=setTimeout(()=>{ rsT=0; const a=document.activeElement;
+let rsT=0, rsDue=0;
+function renderSoon(ms){ const due=Date.now()+(ms||0); if (rsT){ if (due>=rsDue) return; clearTimeout(rsT); } // a sooner request moves the pending render up
+  rsDue=due; rsT=setTimeout(()=>{ rsT=0; const a=document.activeElement;
     if (a && (a.id==="notes" || a.id==="hiked")){ a.addEventListener("blur", ()=>renderSoon(), { once:true }); return; }
     const y=$("#body").scrollTop; render(); $("#body").scrollTop=y; }, ms||0); }
 function render(){
