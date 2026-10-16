@@ -4,7 +4,8 @@ const url = process.env.SITE || "https://jixter86.github.io/Switchback/";
 const res = []; const ck = (name, ok, info = "") => { res.push([ok ? "PASS" : "FAIL", name, info]); console.log(ok ? "PASS" : "FAIL", name, typeof info === "string" ? info : JSON.stringify(info)); };
 const W = ms => new Promise(r => setTimeout(r, ms));
 for (let i = 0; i < 40; i++) { const r = await fetch(url + "?" + Date.now()); if (r.ok && (await r.text()).includes("closestTrails")) { console.log("new build live"); break; } await W(10000); }
-for (let i = 0; i < 40; i++) { const r = await fetch(url + "alltrails.json?" + Date.now()); if (r.ok && (await r.text()).includes("Maui, HI")) { console.log("Maui data live"); break; } await W(10000); }
+let mauiN = 0;
+for (let i = 0; i < 40; i++) { const r = await fetch(url + "alltrails.json?" + Date.now()); if (r.ok) { const j = await r.json(); mauiN = (j.areas.find(a => a.name === "Maui, HI")?.trails || []).length; if (mauiN >= 100) { console.log("Maui data live", mauiN); break; } } await W(10000); }
 const b = await chromium.launch();
 const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: false, geolocation: { latitude: 47.4957, longitude: -121.7868 }, permissions: ["geolocation"] });
 const pg = await ctx.newPage(); const errs = [];
@@ -118,7 +119,8 @@ await step("Zoomed in on Maui still loads nearby trails", async () => { await ev
   await pg.waitForFunction(() => !R.searching, null, { timeout: 150000 }).catch(() => {}); await W(500);
   const r = await ev(() => ({ loaded: visibleTrails().length, onScreen: listTrails().length, btn: !!document.querySelector("#showNear"), err: R.searchErr, at: R.trails.filter(t => t.atId).length, atMore: document.querySelectorAll(".atcard").length }));
   ck("Zoomed in on Maui still loads nearby trails", r.loaded > 0 && (r.onScreen > 0 || r.btn), r);
-  ck("Maui AllTrails trails", r.at > 0 && r.atMore > 0, r); });
+  ck("Maui AllTrails trails", r.at > 0 && r.atMore > 0, r);
+  ck("Maui has the full AllTrails list (100+)", mauiN >= 100, { mauiN }); });
 await step("Show nearby trails button", async () => { const has = await ev(() => !!document.querySelector("#showNear")); if (!has) { ck("Show nearby trails button", true, "trails already on screen"); return; }
   await pg.click("#showNear"); await W(1500); const r = await ev(() => ({ z: map.getZoom(), list: document.querySelectorAll(".card[data-id]").length })); ck("Show nearby trails button", r.list > 0, r); });
 ck("No page errors", errs.length === 0, errs);
