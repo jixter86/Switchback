@@ -3,7 +3,7 @@ import { chromium } from "playwright";
 const url = process.env.SITE || "https://jixter86.github.io/Switchback/";
 const res = []; const ck = (name, ok, info = "") => { res.push([ok ? "PASS" : "FAIL", name, info]); console.log(ok ? "PASS" : "FAIL", name, typeof info === "string" ? info : JSON.stringify(info)); };
 const W = ms => new Promise(r => setTimeout(r, ms));
-for (let i = 0; i < 40; i++) { const r = await fetch(url + "?" + Date.now()); if (r.ok && (await r.text()).includes("rsDue")) { console.log("new build live"); break; } await W(10000); }
+for (let i = 0; i < 40; i++) { const r = await fetch(url + "?" + Date.now()); if (r.ok && (await r.text()).includes("showNearby")) { console.log("new build live"); break; } await W(10000); }
 const b = await chromium.launch();
 const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, hasTouch: false, geolocation: { latitude: 47.4957, longitude: -121.7868 }, permissions: ["geolocation"] });
 const pg = await ctx.newPage(); const errs = [];
@@ -110,6 +110,13 @@ await step("Saved weather board", async () => { await ev(() => setTab("saved"));
 
 await step("Sound + backup settings", async () => { await pg.click("#setBtn"); await W(300); const r = await ev(() => ({ snd: !!document.querySelector("#sndOn"), bk: !!document.querySelector("#bkSave") && !!document.querySelector("#bkLoad"), dev: typeof Device.watchPosition })); await pg.click("#sndTest"); await W(300); await pg.click("#closeSet");
   ck("Sound + backup settings", r.snd && r.bk && r.dev === "function", r); });
+// Maui (2026-10-16): zoomed in to street level with no trail in view, trails nearby must still load
+await step("Zoomed in on Maui still loads nearby trails", async () => { await ev(() => { setTab("explore"); if (meFollow) { meFollow = false; meState(); } sheet("half"); map.setView([20.758, -156.457], 15); }); await W(2500);
+  await pg.waitForFunction(() => !R.searching, null, { timeout: 150000 }).catch(() => {}); await W(500);
+  const r = await ev(() => ({ loaded: visibleTrails().length, onScreen: listTrails().length, btn: !!document.querySelector("#showNear"), err: R.searchErr }));
+  ck("Zoomed in on Maui still loads nearby trails", r.loaded > 0 && (r.onScreen > 0 || r.btn), r); });
+await step("Show nearby trails button", async () => { const has = await ev(() => !!document.querySelector("#showNear")); if (!has) { ck("Show nearby trails button", true, "trails already on screen"); return; }
+  await pg.click("#showNear"); await W(1500); const r = await ev(() => ({ z: map.getZoom(), list: document.querySelectorAll(".card[data-id]").length })); ck("Show nearby trails button", r.list > 0, r); });
 ck("No page errors", errs.length === 0, errs);
 await pg.screenshot({ path: "shots/audit.png" });
 console.log("\nSUMMARY"); for (const r of res) console.log(r[0], r[1]);
