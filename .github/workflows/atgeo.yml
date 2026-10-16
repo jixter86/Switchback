@@ -1,0 +1,18 @@
+name: atgeo
+on:
+  push:
+    branches: [live-test]
+    paths: [tests/maui-src.json, .github/workflows/atgeo.yml]
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: SRC=tests/maui-src.json OUT=tests/maui-geo.json node tests/atgeo.mjs
+      - run: |
+          git config user.name jixter86; git config user.email jixter86@users.noreply.github.com
+          git add tests/maui-geo.json && git commit -m "Maui AllTrails geometry" && git push
