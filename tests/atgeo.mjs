@@ -1,6 +1,6 @@
 // Match every AllTrails listing to OpenStreetMap geometry by name within its area; write tests/atgeo-out.json.
 import fs from "fs";
-const AT = JSON.parse(fs.readFileSync("tests/at-src.json", "utf8"));
+const AT = JSON.parse(fs.readFileSync(process.env.SRC || "tests/at-src.json", "utf8"));
 const MIRRORS = ["https://maps.mail.ru/osm/tools/overpass/api/interpreter", "https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
 function dp(pts, tol) { if (pts.length < 3) return pts; const k = Math.cos(pts[0][0] * Math.PI / 180) * 111195, m = 111195;
   const perp = (p, a, b) => { const ax = a[1] * k, ay = a[0] * m, bx = b[1] * k, by = b[0] * m, px = p[1] * k, py = p[0] * m, dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy;
@@ -54,5 +54,5 @@ for (const area of AT.areas) {
   }
 }
 for (const a of AT.areas) { a.th = th[a.name] || []; for (const t of a.trails) { if (out[t.id]) t.geo = out[t.id]; else delete t.geo; } }
-fs.writeFileSync("tests/alltrails-geo.json", JSON.stringify(AT));
-console.log("matched", Object.keys(out).length, "bytes", fs.statSync("tests/alltrails-geo.json").size);
+fs.writeFileSync((process.env.OUT || "tests/alltrails-geo.json"), JSON.stringify(AT));
+console.log("matched", Object.keys(out).length, "bytes", fs.statSync((process.env.OUT || "tests/alltrails-geo.json")).size);
