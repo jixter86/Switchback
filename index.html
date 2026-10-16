@@ -1139,6 +1139,7 @@ const fmtElV = m => imp() ? [Math.round(m*3.28084).toLocaleString(),"ft"] : [Mat
 const fmtDur = h => { const t=Math.round(h*60); const H=Math.floor(t/60), M=t%60; return H ? H+"h "+String(M).padStart(2,"0")+"m" : M+"m"; };
 const SAC = { hiking:"easy", mountain_hiking:"moderate", demanding_mountain_hiking:"hard", alpine_hiking:"hard", demanding_alpine_hiking:"hard", difficult_alpine_hiking:"hard" };
 function difficulty(t){
+  const a=atFor(t); if (a && AT_DIFF[a.d]) return AT_DIFF[a.d]; // AllTrails' own rating wins, so both cards agree
   if (t.tags && SAC[t.tags.sac_scale]) return SAC[t.tags.sac_scale];
   const mi=(t.loop?t.len:t.len*2)/1609.344, ft=((t.elev?.gain||0)+(t.loop?0:(t.elev?.loss||0)))*3.28084;
   const score=mi+ft/500; return score<4 ? "easy" : score<10 ? "moderate" : "hard";
@@ -1416,8 +1417,11 @@ function seenBounds(){
 function onScreen(t, b){ if (!t.segs) return b.contains(t.head);
   const [s,w,n,e]=t.bbox; if (n<b.getSouth()||s>b.getNorth()||e<b.getWest()||w>b.getEast()) return false;
   return t.segs.some(seg=>seg.some(p=>b.contains(p))); }
+/* Loaded trails nearest the map center, AllTrails ones first. */
+function closestTrails(n){ const c=map.getCenter(), d=t=>fd([c.lat,c.lng],t.head);
+  return visibleTrails().sort((a,b)=>(!atFor(a))-(!atFor(b)) || d(a)-d(b)).slice(0,n); }
 /* Zoom out just enough to show the closest few loaded trails, keeping them clear of the sheet or panel. */
-function showNearby(){ const c=map.getCenter(), all=visibleTrails().slice().sort((a,b)=>fd([c.lat,c.lng],a.head)-fd([c.lat,c.lng],b.head)).slice(0,5);
+function showNearby(){ const c=map.getCenter(), all=closestTrails(5);
   if (!all.length) return;
   const b=L.latLngBounds([c]); all.forEach(t=>b.extend(t.head));
   const pr=$("#panel").getBoundingClientRect(), mr=map.getContainer().getBoundingClientRect();
@@ -1636,7 +1640,7 @@ function renderExplore(b){
     <select id="fLen" aria-label="Length">${opt("","Any length",f.len)}${opt("s",imp()?"Under 3 mi":"Under 5 km",f.len)}${opt("m",imp()?"3 to 8 mi":"5 to 13 km",f.len)}${opt("l",imp()?"Over 8 mi":"Over 13 km",f.len)}</select>
     <select id="fSort" aria-label="Sort">${opt("best","Recommended",f.sort)}${opt("pop","Most popular",f.sort)}${opt("near","Nearest",f.sort)}${opt("short","Shortest",f.sort)}${opt("long","Longest",f.sort)}${opt("name","A to Z",f.sort)}</select>
   </div>`;
-  if (R.searching && !R.trails.length) h+=`<p class="count"><span class="spin"></span> Looking for trails…</p>`;
+  if (R.searching && !R.trails.length && !atOnly().length) h+=`<p class="count"><span class="spin"></span> Looking for trails…</p>`;
   else if (R.searchErr && !R.trails.length) h+=`<div class="empty"><strong>Search failed</strong>${esc(R.searchErr)}<p><button class="btn" id="retry">Try again</button></p></div>`;
   else if (!R.center) h+=`<div class="empty"><strong>Find a trail</strong>Search a town or park above, or zoom the map into an area.<p><button class="btn primary" id="nearMe">Trails near me</button></p></div>`;
   else { const v=listTrails(); R.listKey=R.gen+"|"+v.map(t=>t.id).join();
@@ -1644,8 +1648,12 @@ function renderExplore(b){
     if (R.searching) h+=`<p class="count"><span class="spin"></span> AllTrails trails shown. Loading more from OpenStreetMap…</p>`;
     else if (R.searchErr) h+=`<p class="count">OpenStreetMap is busy, so only AllTrails trails are shown. <a href="#" id="retry">Try again</a></p>`;
     h+=`<p class="count">${v.length} trail${v.length===1?"":"s"} on the map${map.getZoom()<10?" · zoom in to load more":""}${f.act==="hike"&&nb?` · ${nb} bike trail${nb===1?"":"s"} hidden`:""}${mapFOn()?` · <a href="#" id="mfLink">map filters on</a>`:""}</p>`;
-    const near=v.length||R.searching ? 0 : visibleTrails().length;
-    h+= v.length ? v.map(t=>card(t)).join("") : `<div class="empty"><strong>No trails on this part of the map</strong>${R.searching?"Still loading trails for this view.":near?`${near} trail${near===1?"":"s"} nearby.<p><button class="btn primary" id="showNear">Show nearby trails</button></p>`:"There are no named trails near here. Try zooming out or moving the map."}</div>`;
+    // Nothing on screen: list the closest loaded trails (AllTrails ones first) so there is something to browse
+    // while the rest load, instead of an empty box.
+    const near=v.length ? [] : closestTrails(10);
+    if (v.length) h+=v.map(t=>card(t)).join("");
+    else if (near.length) h+=`<div class="lab">Closest trails</div><p class="note" style="margin:0 0 8px">None are on this part of the map yet. <a href="#" id="showNear">Show them on the map</a></p>`+near.map(t=>card(t)).join("");
+    else if (!R.searching) h+=`<div class="empty"><strong>No trails on this part of the map</strong>There are no named trails near here. Try zooming out or moving the map.</div>`;
     const ao=atOnly(); if (ao.length) h+=`<div class="lab atlab">More on AllTrails (${ao.length})</div><p class="note" style="margin:0 0 8px">AllTrails routes with no matching trail on the map here. Tap one to find it on the map, then view and save it like any trail.</p>`+ao.map(atCard).join(""); }
     setTimeout(()=>bindAtCards(b),0);
   b.innerHTML=h;
@@ -1654,7 +1662,7 @@ function renderExplore(b){
   $("#fDiff").onchange=e=>{ f.diff=e.target.value; render(); };
   $("#fLen").onchange=e=>{ f.len=e.target.value; render(); };
   $("#fSort").onchange=e=>{ f.sort=e.target.value; render(); prefetchElev(); };
-  $("#showNear")&&($("#showNear").onclick=showNearby);
+  $("#showNear")&&($("#showNear").onclick=e=>{ e.preventDefault(); showNearby(); });
   $("#retry")&&($("#retry").onclick=e=>{ e.preventDefault?.(); searchArea(); });
   $("#nearMe")&&($("#nearMe").onclick=()=>{ if (!navigator.geolocation) return toast("This browser can't share your location.");
     Device.getPosition().then(p=>flyTo([p.coords.latitude,p.coords.longitude]), ()=>toast("Location permission was denied.")); });
