@@ -3,7 +3,7 @@ import { chromium } from "playwright";
 const url = process.env.SITE || "https://jixter86.github.io/Switchback/";
 const res = []; const ck = (name, ok, info = "") => { res.push([ok ? "PASS" : "FAIL", name, info]); console.log(ok ? "PASS" : "FAIL", name, typeof info === "string" ? info : JSON.stringify(info)); };
 const W = ms => new Promise(r => setTimeout(r, ms));
-for (let i = 0; i < 40; i++) { const r = await fetch(url + "?" + Date.now()); if (r.ok && (await r.text()).includes("ATPIN")) { console.log("new build live"); break; } await W(10000); }
+for (let i = 0; i < 40; i++) { const r = await fetch(url + "?" + Date.now()); if (r.ok && (await r.text()).includes("keep boxes that size")) { console.log("new build live"); break; } await W(10000); }
 let mauiN = 0;
 for (let i = 0; i < 40; i++) { const r = await fetch(url + "alltrails.json?" + Date.now()); if (r.ok) { const j = await r.json(); mauiN = (j.areas.find(a => a.name === "Maui, HI")?.trails || []).length; if (mauiN >= 100) { console.log("Maui data live", mauiN); break; } } await W(10000); }
 const b = await chromium.launch();
@@ -76,7 +76,9 @@ await step("Preview card opens from map", async () => { await ev(() => previewTr
 await step("Preview zoom stays out", async () => ck("Preview zoom stays out", (await ev(() => map.getZoom())) <= 13, await ev(() => map.getZoom())));
 await step("Preview browse next", async () => { const a = await ev(() => R.pv); await ev(() => pvStep(1)); await W(1200); const z = await ev(() => R.pv); ck("Preview browse next", a !== z && !!z, [a, z]); });
 await step("Preview's own move doesn't search", async () => { const n = await searches(); await ev(() => pvStep(1)); await W(2000); ck("Preview's own move doesn't search", (await searches()) === n, (await searches()) - n); });
-await step("Map tap closes preview", async () => { const at = await ev(() => { const e = document.elementFromPoint(200, 250); return { pv: R.pv, el: e?.tagName + "." + (e?.getAttribute("class") || "") }; }); await pg.mouse.click(200, 250); await W(500); ck("Map tap closes preview", await ev(() => !R.pv), { ...at, after: await ev(() => R.pv) }); });
+await step("Map tap closes preview", async () => { // tap a bare bit of map (a trail line there would rightly open that trail)
+  const at = await ev(() => { for (let y = 120; y < 380; y += 20) for (let x = 40; x < 360; x += 20) { const e = document.elementFromPoint(x, y); if (e && !e.classList.contains("leaflet-interactive") && e.closest("#map") && !e.closest(".leaflet-control, #pv")) return { x, y, pv: R.pv }; } return null; });
+  if (at) { await pg.mouse.click(at.x, at.y); await W(500); } ck("Map tap closes preview", !!at && await ev(() => !R.pv), { ...at, after: await ev(() => R.pv) }); });
 await step("Search actually finds trails", async () => { await drag(); await ev(() => searchArea()); await W(300); await pg.waitForFunction(() => !R.searching, null, { timeout: 150000 }).catch(() => {}); ck("Search actually finds trails", await ev(() => R.trails.length > 0), await ev(() => R.trails.length)); });
 
 // Details page
