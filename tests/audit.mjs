@@ -3,7 +3,7 @@ import { chromium } from "playwright";
 const url = process.env.SITE || "https://jixter86.github.io/Switchback/";
 const res = []; const ck = (name, ok, info = "") => { res.push([ok ? "PASS" : "FAIL", name, info]); console.log(ok ? "PASS" : "FAIL", name, typeof info === "string" ? info : JSON.stringify(info)); };
 const W = ms => new Promise(r => setTimeout(r, ms));
-for (let i = 0; i < 40; i++) { const r = await fetch(url + "?" + Date.now()); if (r.ok && (await r.text()).includes("renderProfile")) { console.log("new build live"); break; } await W(10000); }
+for (let i = 0; i < 40; i++) { const r = await fetch(url + "?" + Date.now()); if (r.ok && (await r.text()).includes("ATPIN")) { console.log("new build live"); break; } await W(10000); }
 let mauiN = 0;
 for (let i = 0; i < 40; i++) { const r = await fetch(url + "alltrails.json?" + Date.now()); if (r.ok) { const j = await r.json(); mauiN = (j.areas.find(a => a.name === "Maui, HI")?.trails || []).length; if (mauiN >= 100) { console.log("Maui data live", mauiN); break; } } await W(10000); }
 const b = await chromium.launch();
@@ -147,6 +147,17 @@ await step("Map layers (radar, wildfires, light pollution, air quality)", async 
   const r = await ev(() => ({ ovl: Object.fromEntries(Object.entries(OVL).map(([k, o]) => [k, !!(o.l && map.hasLayer(o.l))])), radarAt: R.radarAt, fireN: R.fireN, fireErr: R.fireErr, aq: window._aq }));
   for (const k of ["radar", "fire", "night"]) await ev(k => setOvl(k, false), k); await ev(() => document.querySelector("#layers").close());
   ck("Map layers (radar, wildfires, light pollution, air quality)", btns === 4 && r.ovl.radar && r.ovl.fire && r.ovl.night && !r.fireErr && typeof r.aq === "number", { btns, ...r, net: net.slice(0, 12) }); });
+await step("Maui trails load with the trail servers down", async () => {
+  // James 2026-10-18 "Only 3 trails populate": Overpass was down. Stored trails + AllTrails pins must still fill Maui.
+  const c2 = await b.newContext({ viewport: { width: 390, height: 844 }, geolocation: { latitude: 20.80, longitude: -156.33 }, permissions: ["geolocation"] });
+  const p2 = await c2.newPage(); await p2.route(/interpreter/, r => r.abort()); const e2 = []; p2.on("pageerror", e => e2.push(e.message));
+  await p2.goto(url, { waitUntil: "load" }); await W(4000);
+  await p2.evaluate(() => { meFollow = false; map.setView([20.80, -156.33], 11); R.cov = []; searchArea(); }); await W(6000);
+  const r = await p2.evaluate(() => ({ searching: R.searching, err: R.searchErr, trails: R.trails.length, snap: SNAP.length, pins: Object.keys(ATPIN).length, count: document.querySelector(".count")?.textContent }));
+  const o = await p2.evaluate(async () => { const x = atOnly().find(x => ATPIN[x.id]); await openAT(x.id); await new Promise(r => setTimeout(r, 2500)); return { n: x.n, pv: R.pv, toast: document.querySelector(".toast")?.textContent }; });
+  ck("Maui trails load with the trail servers down", !r.searching && !r.err && r.trails >= 15 && r.snap >= 3 && r.pins >= 50 && /(\d+) trails on the map/.test(r.count) && +r.count.match(/(\d+)/)[1] >= 5 && e2.length === 0, { ...r, e2 });
+  ck("AllTrails pin opens the trail or shows where it is", !!o.pv || /pin marks/.test(o.toast || ""), o);
+  await c2.close(); });
 ck("No page errors", errs.length === 0, errs);
 await pg.screenshot({ path: "shots/audit.png" });
 console.log("\nSUMMARY"); for (const r of res) console.log(r[0], r[1]);
