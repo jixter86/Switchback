@@ -1490,9 +1490,17 @@ map.on("moveend", ()=>{
 function drawTrails(){
   if (R.tab!=="explore"){ R.drawKey=null; trailLayer.clearLayers(); return; }
   const heads=mapF().headsOnly, vis=visibleTrails();
-  const key=R.gen+"|"+heads+"|"+vis.map(t=>t.id+":"+difficulty(t)).join(); // nothing on the map changed: keep the layers
+  const pins=atOnly().filter(x=>ATPIN[x.id]);
+  const key=R.gen+"|"+heads+"|"+vis.map(t=>t.id+":"+difficulty(t)).join()+"|"+pins.map(x=>x.id).join(); // nothing on the map changed: keep the layers
   if (key===R.drawKey) return; R.drawKey=key;
   trailLayer.clearLayers();
+  const dup={};
+  for (const x of pins){ // AllTrails trails without a mapped line: a pin near where they start
+    const p=ATPIN[x.id], k=p[0]+","+p[1], i=dup[k]=(dup[k]??-1)+1, col=css(DCOL[AT_DIFF[x.d]||"moderate"]);
+    const ll=[p[0]+0.0012*Math.sin(i*2.4)*Math.min(i,1), p[1]+0.0012*Math.cos(i*2.4)*Math.min(i,1)]; // trails pinned to the same park: spread them out
+    const pin=L.circleMarker(ll, { radius:7, color:"#fff", weight:2, fillColor:col, fillOpacity:.9, dashArray:"3 2" }).addTo(trailLayer);
+    const hit=L.circleMarker(ll, { radius:16, stroke:false, fillOpacity:0 }).addTo(trailLayer);
+    [pin,hit].forEach(l=>{ l.on("click", e=>{ L.DomEvent.stop(e); openAT(x.id); }); l.bindTooltip(esc(x.n)); }); }
   for (const t of visibleTrails()){
     const col=css(DCOL[difficulty(t)]);
     if (heads){ // overview shows trailheads only; the full line appears once a trail is picked
@@ -1523,6 +1531,23 @@ function queryBox(grow){
   if (n-s>maxH){ s=c.lat-maxH/2; n=c.lat+maxH/2; } if (e-w>maxW){ w=c.lng-maxW/2; e=c.lng+maxW/2; }
   if (grow){ if (n-s<minH){ s=c.lat-minH/2; n=c.lat+minH/2; } if (e-w<minW){ w=c.lng-minW/2; e=c.lng+minW/2; } }
   return [s,w,n,e]; }
+/* Stored OpenStreetMap trails for the AllTrails areas (osm/*.json, refreshed weekly by a GitHub Action), so those
+   areas show every trail at once and still work when the public Overpass servers are busy. "full" means the stored
+   area covers nearly all of the search box, so no live search is needed. */
+let SNAP=[], ATPIN={}; const snapT={};
+/* AllTrails trails with no OpenStreetMap line get a pin where OpenStreetMap's place search finds their name
+   (osm/atpins.json: id -> [lat, lon, "name"|"place", matched name]), so they show on the map like AllTrails. */
+if (/^https?:/.test(location.protocol)) fetch("osm/atpins.json").then(r=>r.ok?r.json():{}).then(d=>{ ATPIN=d||{}; R.drawKey=null; drawTrails(); if (R.tab==="explore" && !R.sel) render(); }).catch(()=>{});
+function snapLoad(x){ return snapT[x.file]??=fetch(x.file).then(r=>r.ok ? r.json() : Promise.reject(new Error(r.status))).then(j=>buildTrails(j)).catch(e=>{ delete snapT[x.file]; throw e; }); }
+async function snapTrails(bb){
+  const hit=SNAP.filter(x=>bbHits(x.bbox, bb)); if (!hit.length) return null;
+  const sz=b=>Math.max(0,b[2]-b[0])*Math.max(0,b[3]-b[1]), cut=(a,b)=>[Math.max(a[0],b[0]),Math.max(a[1],b[1]),Math.min(a[2],b[2]),Math.min(a[3],b[3])];
+  const out=[];
+  for (const x of hit){
+    try { out.push(...(await snapLoad(x)).filter(t=>t.bbox && bbHits(t.bbox, bb))); } catch(e){ return null; } }
+  return { trails:out, full:hit.reduce((a,x)=>a+sz(cut(x.bbox, bb)), 0)>=0.8*sz(bb) }; }
+if (/^https?:/.test(location.protocol)) fetch("osm/index.json").then(r=>r.ok?r.json():[]).then(d=>{ SNAP=d||[];
+  if (R.center && SNAP.some(x=>bbHits(x.bbox, R.lastBB||[0,0,0,0]))){ R.cov=[]; searchArea(true); } }).catch(()=>{}); // a search already under way here: redo it with the stored trails
 const bbHits=(a,b)=>!(a[2]<b[0]||a[0]>b[2]||a[3]<b[1]||a[1]>b[3]);
 const bbHolds=(a,b)=>a[0]<=b[0]&&a[1]<=b[1]&&a[2]>=b[2]&&a[3]>=b[3];
 function autoSearch(){
@@ -1557,6 +1582,11 @@ out center;`;
   const kept=R.trails.filter(t=>!t.id.startsWith("at") && t.bbox && bbHits(t.bbox, near));
   const area=()=>R.cov.concat([[s,w,n,e]]).reduce((a,x)=>[Math.min(a[0],x[0]),Math.min(a[1],x[1]),Math.max(a[2],x[2]),Math.max(a[3],x[3])]);
   R.lastBB=area(); setTrails(mergeAT(R.lastBB, kept)); listRefresh(true); drawTrails(); // AllTrails trails right away
+  const snap=await snapTrails([s,w,n,e]); if (run!==searchRun) return;
+  if (snap){ const ids=new Set(snap.trails.map(x=>x.id)), all=snap.trails.concat(kept.filter(x=>!ids.has(x.id)));
+    if (snap.full){ R.cov.push([s,w,n,e]); R.lastBB=area(); setTrails(mergeAT(R.lastBB, all)); R.searching=false; render(); prefetchElev();
+      if (R.autoAgain){ R.autoAgain=false; autoSearch(); } return; }
+    setTrails(mergeAT(R.lastBB, all)); listRefresh(true); drawTrails(); kept.push(...snap.trails.filter(x=>!kept.includes(x))); } // shown while the rest loads, and kept if it fails
   try {
     const t=buildTrails(await overpass(q, ()=>{ const c=$(".count"); if (c) c.innerHTML='<span class="spin"></span> The trail server is slow, trying a backup server…'; }));
     if (run!==searchRun) return;
@@ -1905,15 +1935,16 @@ function renderExplore(b){
     const sb=seenBounds(), nb=R.trails.filter(x=>x.kind==="bike" && onScreen(x, sb)).length;
     if (R.searching) h+=`<p class="count"><span class="spin"></span> AllTrails trails shown. Loading more from OpenStreetMap…</p>`;
     else if (R.searchErr) h+=`<p class="count">OpenStreetMap is busy, so only AllTrails trails are shown. <a href="#" id="retry">Try again</a></p>`;
-    h+=`<p class="count">${v.length} trail${v.length===1?"":"s"} on the map${map.getZoom()<10?" · zoom in to load more":""}${f.act==="hike"&&nb?` · ${nb} bike trail${nb===1?"":"s"} hidden`:""}${mapFOn()?` · <a href="#" id="mfLink">map filters on</a>`:""}</p>`;
+    const ao=atOnly(), aoHere=ao.filter(x=>ATPIN[x.id] && sb.contains(ATPIN[x.id].slice(0,2))), aoRest=ao.filter(x=>!aoHere.includes(x)), nHere=v.length+aoHere.length;
+    h+=`<p class="count">${nHere} trail${nHere===1?"":"s"} on the map${map.getZoom()<10?" · zoom in to load more":""}${f.act==="hike"&&nb?` · ${nb} bike trail${nb===1?"":"s"} hidden`:""}${mapFOn()?` · <a href="#" id="mfLink">map filters on</a>`:""}</p>`;
     // Nothing on screen: list the closest loaded trails (AllTrails ones first) so there is something to browse
     // while the rest load, instead of an empty box.
-    const near=v.length ? [] : closestTrails(10);
-    if (v.length) h+=v.map(t=>card(t)).join("");
+    const near=nHere ? [] : closestTrails(10);
+    if (nHere) h+=v.map(t=>card(t)).join("")+aoHere.map(atCard).join("");
     else if (near.length) h+=`<div class="lab">Closest trails</div><p class="note" style="margin:0 0 8px">None are on this part of the map yet. <a href="#" id="showNear">Show them on the map</a></p>`+near.map(t=>card(t)).join("");
     else if (!R.searching && filtCount()) h+=`<div class="empty"><strong>No matching trails</strong>None of the trails here match your filters. <p><button class="btn" id="fClear2">Clear filters</button></p></div>`;
     else if (!R.searching) h+=`<div class="empty"><strong>No trails on this part of the map</strong>There are no named trails near here. Try zooming out or moving the map.</div>`;
-    const ao=atOnly(); if (ao.length) h+=`<div class="lab atlab">More on AllTrails (${ao.length})</div><p class="note" style="margin:0 0 8px">AllTrails routes with no matching trail on the map here. Tap one to find it on the map, then view and save it like any trail.</p>`+ao.map(atCard).join(""); }
+    if (aoRest.length) h+=`<div class="lab atlab">More on AllTrails nearby (${aoRest.length})</div><p class="note" style="margin:0 0 8px">AllTrails routes in this area that aren't on this part of the map. Tap one to find it.</p>`+aoRest.map(atCard).join(""); }
     setTimeout(()=>bindAtCards(b),0);
   b.innerHTML=h;
   const mfl=$("#mfLink"); if (mfl) mfl.onclick=e=>{ e.preventDefault(); openSettings(); };
@@ -2708,7 +2739,10 @@ async function openAT(id){
   const x=atById(id); if (!x) return;
   const hit=R.trails.find(t=>t.atId===id || atNorm(t.name)===atNorm(x.n)); if (hit) return previewTrail(hit.id);
   if (x.geo){ const t=atGeoTrail(x, atArea(x)); R.trails.push(t); R.byId[t.id]=t; return previewTrail(t.id); }
-  if (navigator.onLine===false){ toast("You're offline. Open it in AllTrails when you have signal."); return; }
+  const pin=ATPIN[id], showPin=msg=>{ if (!pin) return toast(msg+" Use the AllTrails link on its card.");
+    if (meFollow){ meFollow=false; meState(); } map.flyTo(pin.slice(0,2), Math.max(map.getZoom(), 14));
+    toast(msg+` The pin marks ${pin[2]==="place" ? "the area it's in, " : ""}${pin[3]}. AllTrails has the full route.`); };
+  if (navigator.onLine===false) return showPin("You're offline.");
   const main=x.n.split(/\s+(?:via|to|from)\s+|:|\(/i)[0], viaPart=(x.n.match(/\s+via\s+(.+)$/i)||[])[1];
   const keys=[atTok(main).slice(0,2), viaPart?atTok(viaPart).slice(0,2):null].filter(k=>k&&k.length);
   if (!keys.length) { toast("Couldn't search for that name."); return; }
@@ -2722,16 +2756,19 @@ out geom;
 node["highway"="trailhead"](${bb});
 out;`;
   toast("Finding "+x.n+" on the map…");
-  let list=[];
-  try { list=buildTrails(await overpass(q), { keepShort:true }); } catch(e){ toast("The map server is busy. Try again in a moment."); return; }
   const want=atTok(x.n), atLen=x.l;
-  let best=null, bs=0;
-  for (const t of list){ const tk=atTok(t.name); if (!tk.length) continue;
-    const ov=tk.filter(w=>want.includes(w)).length; if (!ov) continue;
-    const L2=t.loop?t.len:t.len*2, lenFit=1-Math.min(1, Math.abs(L2-atLen)/Math.max(atLen,1));
-    const sc=ov/Math.max(tk.length,1) + ov/want.length + (t.osm?.t==="r"?.3:0) + .5*lenFit;
-    if (sc>bs){ bs=sc; best=t; } }
-  if (!best){ toast("OpenStreetMap has no trail called "+x.n+" here. Use the AllTrails link on its card."); return; }
+  const pick=list=>{ let best=null, bs=0;
+    for (const t of list){ const tk=atTok(t.name); if (!tk.length) continue;
+      const ov=tk.filter(w=>want.includes(w)).length; if (!ov) continue;
+      const L2=t.loop?t.len:t.len*2, lenFit=1-Math.min(1, Math.abs(L2-atLen)/Math.max(atLen,1));
+      const sc=ov/Math.max(tk.length,1) + ov/want.length + (t.osm?.t==="r"?.3:0) + .5*lenFit;
+      if (sc>bs){ bs=sc; best=t; } }
+    return best; };
+  // The stored trails for the area first (no waiting on Overpass), then a live search, which also finds short paths.
+  const sf=SNAP.find(a=>a.name===atArea(x)?.name), rx=new RegExp(re, "i");
+  let best=null; if (sf) try { best=pick((await snapLoad(sf)).filter(t=>rx.test(t.name))); } catch(e){}
+  if (!best) try { best=pick(buildTrails(await overpass(q), { keepShort:true })); } catch(e){ return showPin("The map server is busy, so its line can't load right now."); }
+  if (!best) return showPin("OpenStreetMap has no trail called "+x.n+".");
   if (R.byId[best.id]){ toast("Closest trail on the map: "+R.byId[best.id].name); return previewTrail(best.id); }
   best.name=x.n; best._atK=undefined; best.atId=x.id; R.trails.push(best); R.byId[best.id]=best;
   previewTrail(best.id); }
