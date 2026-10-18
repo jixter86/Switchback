@@ -1017,7 +1017,7 @@ body.pving .leaflet-bottom{bottom:calc(var(--pvh,170px) + 14px)}
 .ncard .cbody{padding:7px 9px 9px;gap:2px}
 .ncard .nm{font:700 .95rem/1.15 var(--display);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .aqi{font-weight:700}
-body[data-tab=record] .mapbtn,body[data-tab=profile] .mapbtn{display:none}
+body[data-tab=record] .mapbtn,body[data-tab=profile] .mapbtn,body[data-tab=record] .nav,body[data-tab=profile] .nav{display:none}
 /* map layers */
 .laybtn a{display:grid;place-items:center;width:34px;height:34px;color:#333}
 .laybtn svg{width:20px;height:20px}
@@ -1045,7 +1045,7 @@ body[data-tab=record] .mapbtn,body[data-tab=profile] .mapbtn{display:none}
     <button class="iconbtn" type="submit" aria-label="Search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button>
   </form>
   <button class="iconbtn" id="locBtn" aria-label="Show my location"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
-  <button class="iconbtn" id="setBtn" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
+  <button class="iconbtn" id="setBtn" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
   <div class="suggest" id="suggest"></div>
 </header>
 
@@ -1644,8 +1644,8 @@ function featsOf(t){ const a=atFor(t); if (a?.f) return new Set(a.f);
   return f; }
 function featsAt(x){ return x.f ? new Set(x.f) : nameFeats(x.n, new Set()); }
 function tinfo(t){ const a=atFor(t), up=t.elev?t.elev.gain+(t.loop?0:t.elev.loss):null;
-  return { d:difficulty(t), len:a?a.l:(t.loop?t.len:t.len*2), gain:a?a.g:up, r:a?.r||0, rt:a?a.rt:(t.loop?"L":"O"), f:featsOf(t), est:a?.m ? a.m/60 : estHours(t) }; }
-function xinfo(x){ return { d:AT_DIFF[x.d]||"moderate", len:x.l, gain:x.g, r:x.r, rt:x.rt, f:featsAt(x), est:x.m ? x.m/60 : null }; }
+  return { d:difficulty(t), len:a?a.l:(t.loop?t.len:t.len*2), gain:a?a.g:up, r:a?.r||0, rt:a?a.rt:(t.loop?"L":"O"), f:featsOf(t), est:a?.m ? a.m/60 : a ? a.l/4200+a.g/550 : estHours(t) }; }
+function xinfo(x){ return { d:AT_DIFF[x.d]||"moderate", len:x.l, gain:x.g, r:x.r, rt:x.rt, f:featsAt(x), est:x.m ? x.m/60 : x.l/4200+x.g/550 }; }
 const LEN_B={ s:[0,3], m:[3,8], l:[8,1e9] }, GAIN_B={ lo:[0,500], mid:[500,1500], hi:[1500,1e9] }; // miles, feet
 function passF(i){ const f=R.filt;
   if (f.diff.length && !f.diff.includes(i.d)) return false;
@@ -1960,7 +1960,8 @@ async function computeElev(t, maxN=100){
       const el=raw.map((_,i)=>{ let a=0,n=0; for (let k=i-2;k<=i+2;k++) if (raw[k]!=null){ a+=raw[k]; n++; } return a/n; }); // the DEM is ~90 m, so smooth its steps
       let gain=0, loss=0, ref=el[0]; for (const v of el){ if (v-ref>=4){ gain+=v-ref; ref=v; } else if (ref-v>=4){ loss+=ref-v; ref=v; } }
       t.elev={ gain, loss, max:Math.max(...el), min:Math.min(...el), prof:el.map((e,i)=>[Math.round(at[i]), Math.round(e)]), pts:samp.map(p=>[+p[0].toFixed(5),+p[1].toFixed(5)]) };
-      S.elev[t.id]=t.elev; const ks=Object.keys(S.elev); if (ks.length>80) ks.slice(0,ks.length-80).forEach(k=>delete S.elev[k]); // saved trails keep their own copy if (S.saved[t.id]) S.saved[t.id].elev=t.elev; save();
+      S.elev[t.id]=t.elev; const ks=Object.keys(S.elev); if (ks.length>80) ks.slice(0,ks.length-80).forEach(k=>delete S.elev[k]); 
+      if (S.saved[t.id]) S.saved[t.id].elev=t.elev; save(); // saved trails keep their own copy
 }
 async function loadExtras(t){
   const jobs=[];
@@ -2812,15 +2813,15 @@ function previewTrail(id, list){
   thumbPhoto(t).then(u=>{ if (u && R.pv===t.id){ const im=$("#pv .pvphoto"); if (im){ im.style.backgroundImage=`url("${u}")`; im.classList.add("on"); } } });
 }
 function drawPreview(t){
-  const d=difficulty(t), a=atFor(t), L2=t.loop?t.len:t.len*2, i=R.pvList.indexOf(t.id), n=R.pvList.length;
-  const climb=t.elev?fmtEl(t.elev.gain+(t.loop?0:t.elev.loss)):null, away=R.center?fd(meLast||R.center,t.head):null;
+  const d=difficulty(t), a=atFor(t), inf=tinfo(t), L2=inf.len, i=R.pvList.indexOf(t.id), n=R.pvList.length;
+  const climb=inf.gain!=null?fmtEl(inf.gain):null, away=R.center?fd(meLast||R.center,t.head):null;
   $("#pv").style.setProperty("--pvh", "0px");
   $("#pv").innerHTML=`<button class="pvx" aria-label="Close preview">&times;</button>
   <div class="pvmain" role="button" tabindex="0" aria-label="Open ${esc(t.name)} details">
     <div class="pvthumb">${thumbMap(t, 96)}<div class="pvphoto${R.thumbs[t.id]?" on":""}" ${R.thumbs[t.id]?`style="background-image:url('${R.thumbs[t.id]}')"`:""}></div></div>
     <div class="pvtext"><div class="pvname">${esc(t.name)}</div>
       <div class="meta"><span class="chip ${d}">${d}</span>${a?`<span class="chip at">AllTrails ★ ${a.r.toFixed(1)}</span>`:""}${popChip(a)}</div>
-      <div class="pvstats"><span>${fmtLen(L2)} ${t.loop?"loop":"round trip"}</span>${climb?`<span>&#8599; ${climb}</span>`:""}<span>~${fmtDur(estHours(t))}</span>${away!=null?`<span>${fmtLen(away)} away</span>`:""}</div>
+      <div class="pvstats"><span>${fmtLen(L2)} ${RT[inf.rt]||""}</span>${climb?`<span>&#8599; ${climb}</span>`:""}<span>~${fmtDur(inf.est)}</span>${away!=null?`<span>${fmtLen(away)} away</span>`:""}</div>
     </div></div>
   <div class="pvnav"><button class="btn pvprev" ${i<=0?"disabled":""} aria-label="Previous trail">&#8249;</button><span class="note">${i>=0?`${i+1} of ${n}`:""}</span><button class="btn primary pvgo">Details</button><span class="note"></span><button class="btn pvnext" ${i<0||i>=n-1?"disabled":""} aria-label="Next trail">&#8250;</button></div>`;
   const box=$("#pv"), go=()=>{ R.pvBack=t.id; openTrail(t.id); };
