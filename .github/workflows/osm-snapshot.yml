@@ -1,5 +1,5 @@
 name: osm-snapshot
-# Refreshes the stored OpenStreetMap trails (osm/*.json) each week, or when run by hand.
+# Refreshes the stored OpenStreetMap trails (osm/*.json) and AllTrails pin positions each week, or when run by hand.
 on:
   workflow_dispatch:
   schedule:
@@ -15,6 +15,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - run: node tools/osmsnap.mjs
+      - run: node tools/atpins.mjs
       - name: Commit changes
         run: |
           git config user.name "jixter86"; git config user.email "jixter86@users.noreply.github.com"
