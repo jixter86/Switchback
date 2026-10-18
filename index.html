@@ -2799,7 +2799,7 @@ async function thumbPhoto(t){
 function pvTrail(id){ return R.byId[id] || savedTrail(id); }
 function previewTrail(id, list){
   const t=pvTrail(id); if (!t || !t.segs) return openTrail(id);
-  if (list) R.pvList=list; else if (!R.pvList || !R.pvList.includes(id)) R.pvList=visibleTrails().map(x=>x.id);
+  if (list) R.pvList=list; else if (!R.pvList || !R.pvList.includes(id) || R.pvList.some(x=>!pvTrail(x))) R.pvList=visibleTrails().map(x=>x.id);
   R.pv=id;
   if (matchMedia("(max-width:899px)").matches) mapFull(true);
   selLayer.clearLayers();
@@ -2839,7 +2839,8 @@ function pvFrame(t, ph){
   const c=map.project(B.getCenter(), z).add([0, (ph-top)/2]);
   R.flying=true; clearTimeout(R.flyT); R.flyT=setTimeout(()=>{ R.flying=false; }, 1200);
   map.flyTo(map.unproject(c, z), z, { duration:.6 }); }
-function pvStep(k){ const i=R.pvList.indexOf(R.pv), j=i+k; if (j>=0 && j<R.pvList.length) previewTrail(R.pvList[j]); }
+function pvStep(k){ R.pvList=R.pvList.filter(id=>id===R.pv || pvTrail(id)); // trails dropped since the list was made are skipped
+  const i=R.pvList.indexOf(R.pv), j=i+k; if (j>=0 && j<R.pvList.length) previewTrail(R.pvList[j]); }
 function hidePreview(){ R.pv=null; $("#pv").hidden=true; document.body.classList.remove("pving"); }
 function closePreview(){ if (!R.pv) return; hidePreview(); if (!R.sel) selLayer.clearLayers(); }
 map.on("click", ()=>{ if (R.pv) closePreview(); });
