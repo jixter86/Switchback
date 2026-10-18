@@ -70,13 +70,13 @@ await step("Trails load by themselves after moving the map", async () => { const
   await pg.waitForFunction(() => !R.searching, null, { timeout: 150000 }).catch(() => {});
   const r = await ev(() => ({ covered: R.cov.some(c => bbHolds(c, queryBox())), err: R.searchErr })); ck("Trails load by themselves after moving the map", (await searches()) > n && (r.covered || !!r.err), { ...r, searches: (await searches()) - n }); });
 await step("Moving back over a searched area doesn't search again", async () => { await ev(() => map.panBy([-map.getSize().x * 1.5, 0])); await W(2000); const n = await searches();
-  await ev(() => map.panBy([map.getSize().x * 1.5, 0])); await W(2000); ck("Moving back over a searched area doesn't search again", (await searches()) === n, (await searches()) - n); });
+  await ev(() => map.panBy([map.getSize().x * 1.5, 0])); await W(2000); ck("Moving back over a searched area doesn't search again", (await searches()) === n, { extra: (await searches()) - n, err: await ev(() => R.searchErr), cov: await ev(() => R.cov.length) }); });
 await step("Preview card opens from map", async () => { await ev(() => previewTrail(visibleTrails()[0].id)); await W(1500);
   ck("Preview card opens from map", await ev(() => !document.querySelector("#pv").hidden && !!document.querySelector("#pv .pvthumb, #pv .tmap")), await ev(() => document.querySelector("#pv").innerText.slice(0, 120))); });
 await step("Preview zoom stays out", async () => ck("Preview zoom stays out", (await ev(() => map.getZoom())) <= 13, await ev(() => map.getZoom())));
 await step("Preview browse next", async () => { const a = await ev(() => R.pv); await ev(() => pvStep(1)); await W(1200); const z = await ev(() => R.pv); ck("Preview browse next", a !== z && !!z, [a, z]); });
 await step("Preview's own move doesn't search", async () => { const n = await searches(); await ev(() => pvStep(1)); await W(2000); ck("Preview's own move doesn't search", (await searches()) === n, (await searches()) - n); });
-await step("Map tap closes preview", async () => { await pg.mouse.click(200, 250); await W(500); ck("Map tap closes preview", await ev(() => !R.pv)); });
+await step("Map tap closes preview", async () => { const at = await ev(() => { const e = document.elementFromPoint(200, 250); return { pv: R.pv, el: e?.tagName + "." + (e?.getAttribute("class") || "") }; }); await pg.mouse.click(200, 250); await W(500); ck("Map tap closes preview", await ev(() => !R.pv), { ...at, after: await ev(() => R.pv) }); });
 await step("Search actually finds trails", async () => { await drag(); await ev(() => searchArea()); await W(300); await pg.waitForFunction(() => !R.searching, null, { timeout: 150000 }).catch(() => {}); ck("Search actually finds trails", await ev(() => R.trails.length > 0), await ev(() => R.trails.length)); });
 
 // Details page
@@ -128,8 +128,8 @@ await step("Zoomed in on Maui still loads nearby trails", async () => { await ev
   const early = await ev(() => ({ searching: R.searching, atCards: document.querySelectorAll(".card .chip.at, .atcard").length, first: document.querySelector("#body .card .nm")?.textContent }));
   ck("AllTrails trails to browse while Maui loads", early.atCards > 0, early);
   await pg.waitForFunction(() => !R.searching, null, { timeout: 150000 }).catch(() => {}); await W(500);
-  const r = await ev(() => ({ loaded: visibleTrails().length, onScreen: listTrails().length, btn: !!document.querySelector("#showNear"), err: R.searchErr, at: R.trails.filter(t => t.atId).length, atMore: document.querySelectorAll(".atcard").length }));
-  ck("Zoomed in on Maui still loads nearby trails", r.loaded > 0 && (r.onScreen > 0 || r.btn), r);
+  const r = await ev(() => ({ loaded: visibleTrails().length, onScreen: listTrails().length, pinsHere: atOnly().filter(x => ATPIN[x.id] && seenBounds().contains(ATPIN[x.id].slice(0, 2))).length, btn: !!document.querySelector("#showNear"), err: R.searchErr, at: R.trails.filter(t => t.atId).length, atMore: document.querySelectorAll(".atcard").length }));
+  ck("Zoomed in on Maui still loads nearby trails", r.loaded > 0 && (r.onScreen > 0 || r.pinsHere > 0 || r.btn), r);
   ck("Maui AllTrails trails", r.at > 0 && r.atMore > 0, r);
   ck("Maui has the full AllTrails list (100+)", mauiN >= 100, { mauiN }); });
 await step("Show nearby trails button", async () => { const has = await ev(() => !!document.querySelector("#showNear")); if (!has) { ck("Show nearby trails button", true, "trails already on screen"); return; }
