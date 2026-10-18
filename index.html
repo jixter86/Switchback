@@ -940,9 +940,102 @@ body.pving .leaflet-bottom{bottom:calc(var(--pvh,170px) + 14px)}
 .iconbtn.on#locBtn{background:#2b7bf3;color:#fff}
 .me{background:#2b7bf3;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 6px rgba(43,123,243,.25)}
 .leaflet-container{font-family:var(--body)}
+/* ===== AllTrails-style layout (2026-10-18) ===== */
+.tabs svg{width:22px;height:22px;display:block;margin:0 auto 2px}
+@media (max-width:899px){
+  body{--tabh:calc(56px + env(safe-area-inset-bottom,0px))}
+  .tabs{position:fixed;z-index:25;left:0;right:0;bottom:0;height:var(--tabh);padding:4px 6px env(safe-area-inset-bottom,0px);background:var(--panel);border-top:1px solid var(--line);border-bottom:0;gap:0;box-shadow:0 -2px 10px rgba(0,0,0,.06)}
+  .tabs button{font:600 .72rem var(--body);text-transform:none;letter-spacing:0;padding:5px 2px 2px;border-radius:0}
+  .tabs button[aria-selected=true]{background:none}
+  .panel{bottom:var(--tabh)}
+  body[data-size=full]{--sheet:calc(100dvh - env(safe-area-inset-top,0px) - 64px - var(--tabh))}
+  .leaflet-bottom{bottom:calc(var(--sheet,46dvh) + var(--tabh))}
+  body.mapfull .leaflet-bottom{bottom:var(--tabh)}
+  .mapbtn{bottom:calc(var(--tabh) + 14px)}
+  .pv{bottom:calc(var(--tabh) + 10px)}
+  body.pving .mapbtn{bottom:calc(var(--tabh) + var(--pvh,170px) + 20px)}
+  body.pving .leaflet-bottom{bottom:calc(var(--tabh) + var(--pvh,170px) + 14px)}
+  .body{padding-bottom:80px}
+}
+@media (min-width:900px){
+  .tabs{position:fixed;z-index:11;left:0;top:60px;width:410px;background:var(--panel);transition:transform .25s ease}
+  .tabs svg{display:none}
+  .panel{padding-top:112px}
+  body.mapfull .tabs{transform:translateX(-100%)}
+}
+.dhead{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.iconx{border:0;background:var(--panel2);color:var(--ink);width:34px;height:34px;border-radius:50%;font-size:1.4rem;line-height:1;display:grid;place-items:center;flex:0 0 auto}
+/* filter pills + filter sheet */
+.fpills{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -14px;padding:0 14px 10px}
+.fpills::-webkit-scrollbar{display:none}
+.fpill{flex:0 0 auto;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:7px 12px;font-size:.85rem;font-weight:600;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;max-width:220px;overflow:hidden;text-overflow:ellipsis}
+.fpill.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.fpill svg{width:15px;height:15px;flex:0 0 auto}
+.fdlg{width:min(96vw,480px);max-height:86dvh;overflow-y:auto;overscroll-behavior:contain}
+.fsec{margin-top:16px}.fsec h3{font:700 1rem var(--display);text-transform:uppercase;letter-spacing:.03em;margin:0 0 8px}
+.opts{display:flex;flex-wrap:wrap;gap:6px}
+.opt{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:7px 13px;font-size:.88rem;font-weight:600}
+.opt[aria-pressed=true]{background:var(--brand);border-color:var(--brand);color:#fff}
+@media (prefers-color-scheme: dark){.opt[aria-pressed=true]{color:#10170f}}
+.fdlg .foot{position:sticky;bottom:-16px;background:var(--panel);padding:12px 0 6px;margin-top:16px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line)}
+/* photo trail cards */
+.tcard{padding:0;overflow:hidden;gap:0;cursor:pointer;border-radius:14px}
+.cimg{position:relative;height:150px;background:linear-gradient(135deg,var(--panel2),color-mix(in srgb,var(--brand) 18%,var(--panel2)));overflow:hidden}
+.cimg .cphoto{position:absolute;inset:0;background:center/cover no-repeat;opacity:0;transition:opacity .3s}
+.cimg .cphoto.on{opacity:1}
+.cimg .nogeo{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:.8rem}
+.cbadges{position:absolute;left:8px;top:8px;display:flex;flex-wrap:wrap;gap:4px;z-index:2}
+.cbadges .chip{background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.cbadges .chip.at{background:#3b7d23;color:#fff}
+.heart{position:absolute;z-index:2;top:8px;right:8px;width:38px;height:38px;border-radius:50%;border:0;background:rgba(255,255,255,.94);color:#333;display:grid;place-items:center;box-shadow:0 1px 4px rgba(0,0,0,.25);padding:0}
+.heart svg,.act svg.hs{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round}
+.heart.on{color:#e0245e}.heart.on svg,.act.on svg.hs{fill:currentColor}
+.cbody{padding:10px 12px 12px;display:flex;flex-direction:column;gap:3px}
+.tcard .nm{font-size:1.12rem}
+.cline{font-size:.86rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:0 5px;align-items:center}
+.dtx{font-weight:700}.dtx.easy{color:var(--easy)}.dtx.moderate{color:var(--mod)}.dtx.hard{color:var(--hard)}
+.tcard .atlink{margin-left:auto;color:#3b7d23;font-weight:600;text-decoration:none}
+/* trail page */
+.dsub{font-size:.92rem;color:var(--muted);margin:0 0 6px;display:flex;flex-wrap:wrap;gap:0 6px;align-items:center}
+.acts{display:flex;justify-content:space-between;gap:2px;margin:12px 0 6px}
+.act{flex:1;border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:5px;font-size:.74rem;font-weight:600;color:var(--ink);text-decoration:none;padding:0;min-width:0}
+.act i{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:var(--panel2);font-style:normal}
+.act svg{width:21px;height:21px}
+.act.pri i{background:var(--brand);color:#fff}
+@media (prefers-color-scheme: dark){.act.pri i{color:#10170f}}
+.act.on i{color:#e0245e}
+.act:disabled{opacity:.45}
+.desc{font-size:.95rem;line-height:1.45;margin:10px 0 6px}
+.tagchips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.tagc{background:var(--panel2);border-radius:999px;padding:5px 11px;font-size:.83rem;font-weight:600}
+.stars{display:inline-flex;gap:0}
+.star{border:0;background:none;font-size:1.9rem;line-height:1;color:var(--line);padding:0 3px}
+.star.on{color:#f2b01e}
+.near{display:flex;gap:10px;overflow-x:auto;margin:0 -14px;padding:0 14px 6px;scrollbar-width:none}
+.ncard{flex:0 0 172px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel);cursor:pointer}
+.ncard .cimg{height:100px}
+.ncard .cbody{padding:7px 9px 9px;gap:2px}
+.ncard .nm{font:700 .95rem/1.15 var(--display);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.aqi{font-weight:700}
+body[data-tab=record] .mapbtn,body[data-tab=profile] .mapbtn{display:none}
+/* map layers */
+.laybtn a{display:grid;place-items:center;width:34px;height:34px;color:#333}
+.laybtn svg{width:20px;height:20px}
+.laygrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.layb{border:0;background:none;padding:0;font-size:.76rem;font-weight:600;color:var(--ink);display:flex;flex-direction:column;gap:4px;align-items:center}
+.layb img{width:100%;aspect-ratio:1;border-radius:12px;object-fit:cover;background:var(--panel2);border:3px solid transparent;box-sizing:border-box}
+.layb[aria-pressed=true] img{border-color:var(--brand)}
+.ovl label{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+.ovl label span{flex:1}.ovl small{display:block;color:var(--muted);font-size:.78rem}
+.ovl input{width:20px;height:20px}
+/* profile */
+.pstats{grid-template-columns:repeat(2,minmax(0,1fr))}
+.rv{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px}
+.rvstars{color:#f2b01e;letter-spacing:1px}
+.rv .linkish{font:700 1.02rem var(--display)}
 </style>
 </head>
-<body data-size="half">
+<body data-size="half" data-tab="explore">
 <div id="map" aria-label="Map"></div>
 
 <header class="top">
@@ -964,13 +1057,34 @@ body.pving .leaflet-bottom{bottom:calc(var(--pvh,170px) + 14px)}
 
 <aside class="panel" id="panel">
   <button class="handle" id="handle" aria-label="Resize panel"><span></span></button>
-  <nav class="tabs" role="tablist">
-    <button role="tab" data-tab="explore" aria-selected="true">Explore</button>
-    <button role="tab" data-tab="saved" aria-selected="false">Saved</button>
-    <button role="tab" data-tab="record" aria-selected="false">Record</button>
-  </nav>
   <div class="body" id="body"></div>
 </aside>
+<nav class="tabs" role="tablist">
+  <button role="tab" data-tab="explore" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Explore</button>
+  <button role="tab" data-tab="saved" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 20s-7-4.3-9-8.6C1.6 8.2 3.6 4.6 7 4.6c2 0 3.3 1.1 5 3 1.7-1.9 3-3 5-3 3.4 0 5.4 3.6 4 6.8-2 4.3-9 8.6-9 8.6z"/></svg>Saved</button>
+  <button role="tab" data-tab="record" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3 19 20l-7-4-7 4z"/></svg>Navigate</button>
+  <button role="tab" data-tab="profile" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4.5 4.4-7 8-7s7 2.5 8 7"/></svg>Profile</button>
+</nav>
+
+<dialog id="filters" class="fdlg">
+  <div class="dhead"><h2>Filters</h2><button class="iconx" type="button" data-close aria-label="Close">&times;</button></div>
+  <div id="fBody"></div>
+  <div class="foot"><button class="btn" type="button" id="fClear">Clear all</button><button class="btn primary" type="button" id="fShow" data-close>Show trails</button></div>
+</dialog>
+<dialog id="listDlg">
+  <div class="dhead"><h2>Save to list</h2><button class="iconx" type="button" data-close aria-label="Close">&times;</button></div>
+  <p class="note" id="ldName" style="margin:0 0 6px"></p>
+  <div class="lists" id="ldLists"></div>
+  <form class="row" id="ldNew" style="margin-top:8px"><input class="txt" id="ldNewName" placeholder="New list, e.g. Fall colors" style="flex:1;width:auto"><button class="btn">Create</button></form>
+  <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn primary" type="button" data-close>Done</button></div>
+</dialog>
+<dialog id="layers" class="fdlg">
+  <div class="dhead"><h2>Map layers</h2><button class="iconx" type="button" data-close aria-label="Close">&times;</button></div>
+  <div class="lab" style="margin-top:4px">Map type</div>
+  <div class="laygrid" id="layBase"></div>
+  <div class="lab">Map details</div>
+  <div class="ovl" id="layOvl"></div>
+</dialog>
 
 <dialog id="settings">
   <h2>Settings</h2>
@@ -1037,9 +1151,12 @@ let saveT; function saveSoon(){ clearTimeout(saveT); saveT=setTimeout(save, 800)
 addEventListener("pagehide", ()=>save()); document.addEventListener("visibilitychange", ()=>{ if (document.visibilityState==="hidden") save(); });
 function save(){ clearTimeout(saveT); try { localStorage.setItem(KEY, JSON.stringify(S)); return true; } catch(e){ toast("Storage is full or blocked; changes may not stick."); return false; } }
 
-const R = { tab:"explore", trails:[], byId:{}, sel:null, filt:{ act:"hike", diff:"", len:"", sort:"best" }, center:null,
-  searching:false, searchErr:null, wx:{}, drive:{}, rec:null, hl:{}, areas:{}, media:{}, base:"Esri Topo", nav:null };
+const FDEF={ act:"hike", sort:"best", diff:[], len:"", gain:"", rating:0, rt:[], attr:[], suit:[] };
+const R = { tab:"explore", trails:[], byId:{}, sel:null, filt:structuredClone(FDEF), center:null,
+  searching:false, searchErr:null, wx:{}, air:{}, drive:{}, rec:null, hl:{}, areas:{}, media:{}, base:"Esri Topo", nav:null, thumbs:{}, thumbHtml:{} };
 if (/^(hike|bike|all)$/.test(savedAct||"")) R.filt.act=savedAct;
+try { const f=JSON.parse(localStorage.getItem(KEY+".filt")||"null"); if (f) for (const k in FDEF) if (typeof f[k]===typeof FDEF[k] && Array.isArray(f[k])===Array.isArray(FDEF[k])) R.filt[k]=f[k]; } catch(e){}
+function fSave(){ try { localStorage.setItem(KEY+".filt", JSON.stringify(R.filt)); localStorage.setItem(KEY+".act", R.filt.act); } catch(e){} }
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
@@ -1311,7 +1428,53 @@ map.on("baselayerchange", e=>{ R.base=S.base=e.name; save(); });
 let tileFails=0;
 base.Topo.on("tileerror", ()=>{ if (++tileFails===6 && map.hasLayer(base.Topo)){ map.removeLayer(base.Topo); base["Esri Topo"].addTo(map); R.base="Esri Topo"; toast("Switched to the Esri topo map because OpenTopoMap tiles weren't loading."); } });
 L.control.zoom({ position:"topright" }).addTo(map);
-L.control.layers(base, over, { position:"topright" }).addTo(map);
+const BASE_LAB={ "Esri Topo":"Topo", "Topo":"OpenTopo", "Street":"Street", "Satellite":"Satellite" };
+const LayCtl=L.Control.extend({ onAdd(){ const d=L.DomUtil.create("div","leaflet-bar laybtn");
+  d.innerHTML=`<a href="#" role="button" title="Map layers" aria-label="Map layers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></svg></a>`;
+  L.DomEvent.disableClickPropagation(d); d.firstChild.onclick=e=>{ e.preventDefault(); openLayers(); }; return d; } });
+new LayCtl({ position:"topright" }).addTo(map);
+function setBase(name){ if (!base[name] || name===R.base && map.hasLayer(base[name])) return;
+  Object.values(base).forEach(l=>map.hasLayer(l)&&map.removeLayer(l)); base[name].addTo(map); base[name].bringToBack(); R.base=S.base=name; save(); }
+const GIBS="https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png";
+const OVL={
+  routes:{ name:"Marked hiking routes", sub:"Signed long trails, from Waymarked Trails", make:async()=>over["Marked hiking routes"] },
+  radar:{ name:"Rain radar", sub:"Latest radar, from RainViewer", make:makeRadar },
+  fire:{ name:"Wildfires", sub:"Current US fires and their outlines (NIFC)", make:async()=>makeFire() },
+  night:{ name:"Light pollution", sub:"Night lights from NASA. Darker is better for stars", make:async()=>L.tileLayer(GIBS, { maxNativeZoom:8, maxZoom:19, opacity:.7, attribution:"Night lights &copy; NASA Black Marble" }) },
+};
+async function makeRadar(){ const j=await (await fetch("https://api.rainviewer.com/public/weather-maps.json")).json(), f=j.radar?.past?.at(-1); if (!f) throw new Error("no radar");
+  R.radarAt=f.time*1000;
+  return L.tileLayer(j.host+f.path+"/256/{z}/{x}/{y}/2/1_1.png", { maxNativeZoom:7, maxZoom:19, opacity:.6, attribution:'Radar &copy; <a href="https://www.rainviewer.com">RainViewer</a>' }); }
+function firePop(p){ const n=p.poly_IncidentName||p.attr_IncidentName||p.IncidentName||"Wildfire", ac=p.attr_IncidentSize??p.IncidentSize??p.poly_GISAcres, pc=p.attr_PercentContained??p.PercentContained;
+  return `<b>${esc(n)}</b>${ac!=null?`<br>${Math.round(ac).toLocaleString()} acres`:""}${pc!=null?`, ${Math.round(pc)}% contained`:""}`; }
+function makeFire(){ const g=L.layerGroup(); let last="";
+  const q=(svc, env)=>`https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/${svc}/FeatureServer/0/query?where=1%3D1&outFields=*&geometry=${env}&geometryType=esriGeometryEnvelope&inSR=4326&outSR=4326&spatialRel=esriSpatialRelIntersects&resultRecordCount=300&geometryPrecision=5&f=geojson`;
+  const load=async()=>{ if (!map.hasLayer(g)) return; const b=map.getBounds().pad(.2), env=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].map(v=>v.toFixed(3)).join(","); if (env===last) return; last=env;
+    try { const [per, inc]=await Promise.all(["WFIGS_Interagency_Perimeters_Current","WFIGS_Incident_Locations_Current"].map(sv=>fetch(q(sv, env)).then(r=>r.json())));
+      g.clearLayers();
+      L.geoJSON(per, { style:{ color:"#d7301f", weight:2, fillColor:"#fc8d59", fillOpacity:.35 }, onEachFeature:(f,l)=>l.bindPopup(firePop(f.properties||{})) }).addTo(g);
+      L.geoJSON(inc, { filter:f=>(f.properties?.IncidentTypeCategory||"WF")==="WF", pointToLayer:(f,ll)=>L.circleMarker(ll, { radius:7, color:"#fff", weight:2, fillColor:"#d7301f", fillOpacity:1 }), onEachFeature:(f,l)=>l.bindPopup(firePop(f.properties||{})) }).addTo(g);
+      R.fireN=g.getLayers().reduce((n,l)=>n+l.getLayers().length,0); R.fireErr=null; }
+    catch(e){ R.fireErr=true; last=""; }
+    if ($("#layers").open) fillLayers(); };
+  g.on("add", ()=>{ last=""; load(); map.on("moveend", load); }); g.on("remove", ()=>map.off("moveend", load));
+  return g; }
+async function setOvl(k, on){ const o=OVL[k]; S.ovl=Object.assign({}, S.ovl, { [k]:on }); save();
+  if (on){ try { o.l=o.l||await o.make(); if (S.ovl[k] && !map.hasLayer(o.l)) o.l.addTo(map); } catch(e){ S.ovl[k]=false; save(); toast(o.name+" isn't available right now."); } }
+  else if (o.l && map.hasLayer(o.l)) map.removeLayer(o.l);
+  if ($("#layers").open) fillLayers(); }
+setInterval(()=>{ const o=OVL.radar; if (!S.ovl?.radar || !o.l) return; const old=o.l; // radar frames are 10 minutes apart
+  makeRadar().then(l=>{ if (!S.ovl.radar) return; o.l=l; l.addTo(map); map.removeLayer(old); }).catch(()=>{}); }, 600000);
+function openLayers(){ fillLayers(); $("#layers").showModal(); }
+function fillLayers(){ const c=map.project(map.getCenter(), 11).divideBy(256).floor();
+  $("#layBase").innerHTML=Object.keys(base).map(k=>`<button type="button" class="layb" data-base="${esc(k)}" aria-pressed="${R.base===k}"><img alt="" src="${esc(L.Util.template(base[k]._url, { s:"a", z:11, x:c.x, y:c.y, r:"" }))}">${esc(BASE_LAB[k]||k)}</button>`).join("");
+  const age=R.radarAt ? Math.max(1, Math.round((Date.now()-R.radarAt)/60000)) : null;
+  $("#layOvl").innerHTML=Object.entries(OVL).map(([k,o])=>`<label><input type="checkbox" data-ovl="${k}"${S.ovl?.[k]?" checked":""}><span>${esc(o.name)}<small>${esc(o.sub)}${k==="radar"&&S.ovl?.radar&&age?` · ${age} min ago`:""}${k==="fire"&&S.ovl?.fire?(R.fireErr?" · couldn't load right now":R.fireN!=null?` · ${R.fireN} in this area`:""):""}</small></span></label>`).join("")
+    +`<p class="note" style="margin:10px 0 0">Which trails show (AllTrails only, popular, completed, trailheads only) is in <a href="#" id="layMf">Settings</a>.</p>`;
+  $("#layBase").querySelectorAll("[data-base]").forEach(x=>x.onclick=()=>{ setBase(x.dataset.base); fillLayers(); });
+  $("#layOvl").querySelectorAll("[data-ovl]").forEach(x=>x.onchange=()=>setOvl(x.dataset.ovl, x.checked));
+  $("#layMf").onclick=e=>{ e.preventDefault(); $("#layers").close(); openSettings(); }; }
+for (const k in S.ovl||{}) if (S.ovl[k] && OVL[k]) setOvl(k, true);
 L.control.scale({ imperial:true, metric:true, position:"bottomright" }).addTo(map);
 const trailLayer=L.layerGroup().addTo(map), selLayer=L.layerGroup().addTo(map), recLayer=L.layerGroup().addTo(map);
 let meMarker=null, meWatch=null, cursor=null;
@@ -1451,16 +1614,109 @@ function visibleTrails(){
   t=t.filter(x=>{ const a=atFor(x); if (a? !m.at : !m.osm) return false; if (!m[difficulty(x)]) return false;
     if (m.pop && !(a?.p && a.p<=10)) return false; if (m.hideDone && S.lists.done?.ids.includes(x.id)) return false; return true; });
   if (f.act==="hike") t=t.filter(x=>x.kind!=="bike"); else if (f.act==="bike") t=t.filter(x=>x.kind!=="hike");
-  if (f.diff) t=t.filter(x=>difficulty(x)===f.diff);
-  if (f.len){ const mi=x=>(x.loop?x.len:x.len*2)/1609.344;
-    t=t.filter(x=> f.len==="s" ? mi(x)<3 : f.len==="m" ? mi(x)>=3&&mi(x)<=8 : mi(x)>8); }
+  t=t.filter(x=>passF(tinfo(x)));
   const dist=x=>R.center?fd(R.center,x.head):0;
   const tier=x=>(x.osm?.t==="r"?0:x.official?1:2);
   const pr=x=>atFor(x)?.p??999;
   const atr=x=>{ const a=atFor(x); return a ? (a.p||50) : 999; };
-  const sorts={ best:(a,b)=>atr(a)-atr(b)||tier(a)-tier(b)||dist(a)-dist(b), pop:(a,b)=>pr(a)-pr(b)||tier(a)-tier(b)||dist(a)-dist(b), near:(a,b)=>dist(a)-dist(b), short:(a,b)=>a.len-b.len, long:(a,b)=>b.len-a.len, name:(a,b)=>a.name.localeCompare(b.name) };
+  const rate=x=>atFor(x)?.r||0;
+  const sorts={ rate:(a,b)=>rate(b)-rate(a)||pr(a)-pr(b), best:(a,b)=>atr(a)-atr(b)||tier(a)-tier(b)||dist(a)-dist(b), pop:(a,b)=>pr(a)-pr(b)||tier(a)-tier(b)||dist(a)-dist(b), near:(a,b)=>dist(a)-dist(b), short:(a,b)=>a.len-b.len, long:(a,b)=>b.len-a.len, name:(a,b)=>a.name.localeCompare(b.name) };
   return t.sort(sorts[f.sort]);
 }
+
+
+/* ================= AllTrails-style filters =================
+   Every trail is described the same way (difficulty, length, climb, rating, route type, tags) so one test
+   serves the map, the list and the "More on AllTrails" cards. AllTrails' own numbers and tags win when the
+   trail is matched; otherwise they come from OpenStreetMap (tags, and words in the name). */
+const DLAB={ easy:"Easy", moderate:"Moderate", hard:"Hard" };
+const FEAT={ waterfall:"Waterfall", views:"Views", lake:"Lake", river:"River", beach:"Beach", forest:"Forest", "wild-flowers":"Wildflowers", wildlife:"Wildlife", cave:"Cave", "historic-site":"Historic site", "hot-springs":"Hot springs" };
+const SUIT={ dogs:"Dog friendly", kids:"Kid friendly", ada:"Wheelchair friendly", strollers:"Stroller friendly", paved:"Paved" };
+const TAGLAB=Object.assign({}, FEAT, { dogs:"Dog friendly", "dogs-leash":"Dogs on leash", "dogs-no":"No dogs", kids:"Kid friendly", ada:"Wheelchair friendly", strollers:"Stroller friendly", paved:"Paved", "partially-paved":"Partly paved", "city-walk":"City walk", "rails-trails":"Rail trail" });
+const ACTLAB={ hiking:"Hiking", walking:"Walking", running:"Running", "trail-running":"Trail running", "mountain-biking":"Mountain biking", "road-biking":"Road biking", birding:"Birding", camping:"Camping", backpacking:"Backpacking", "horseback-riding":"Horseback riding", "scenic-driving":"Scenic driving", fishing:"Fishing", "rock-climbing":"Rock climbing", "off-road-driving":"Off-road driving", snowshoeing:"Snowshoeing", "bike-touring":"Bike touring", "paddle-sports":"Paddle sports" };
+const NAME_FEAT=[[/\bfalls?\b|waterfall|cascade/i,"waterfall"],[/\blakes?\b|\bpond|\btarn|reservoir/i,"lake"],[/\briver|\bcreek|\bstream|\bbrook/i,"river"],[/\bbeach|\bcoast|shore|\bbay\b|\bcove\b/i,"beach"],[/\bcaves?\b|lava tube|grotto/i,"cave"],[/lookout|overlook|vista|\bviews?\b|summit|\bpeak\b|\bpoint\b|ridge|crater|\bpali\b|butte|\bmount\b|\bmt\b/i,"views"],[/forest|\bgrove|\bwoods\b|redwood|arboretum/i,"forest"],[/historic|petroglyph|\bfort\b|\bmine\b|ruins|heiau|lighthouse/i,"historic-site"],[/hot springs?/i,"hot-springs"]];
+function nameFeats(name, f){ for (const [re,k] of NAME_FEAT) if (re.test(name)) f.add(k); return f; }
+function featsOf(t){ const a=atFor(t); if (a?.f) return new Set(a.f);
+  const f=nameFeats(t.name, new Set()), tg=t.tags||{};
+  if (/^(yes|designated)$/.test(tg.dog||"")) f.add("dogs"); else if (tg.dog==="leashed") f.add("dogs-leash"); else if (tg.dog==="no") f.add("dogs-no");
+  if (tg.wheelchair==="yes") f.add("ada");
+  if (/^(paved|asphalt|concrete|paving_stones)$/.test(tg.surface||"")) f.add("paved");
+  return f; }
+function featsAt(x){ return x.f ? new Set(x.f) : nameFeats(x.n, new Set()); }
+function tinfo(t){ const a=atFor(t), up=t.elev?t.elev.gain+(t.loop?0:t.elev.loss):null;
+  return { d:difficulty(t), len:a?a.l:(t.loop?t.len:t.len*2), gain:a?a.g:up, r:a?.r||0, rt:a?a.rt:(t.loop?"L":"O"), f:featsOf(t), est:a?.m ? a.m/60 : estHours(t) }; }
+function xinfo(x){ return { d:AT_DIFF[x.d]||"moderate", len:x.l, gain:x.g, r:x.r, rt:x.rt, f:featsAt(x), est:x.m ? x.m/60 : null }; }
+const LEN_B={ s:[0,3], m:[3,8], l:[8,1e9] }, GAIN_B={ lo:[0,500], mid:[500,1500], hi:[1500,1e9] }; // miles, feet
+function passF(i){ const f=R.filt;
+  if (f.diff.length && !f.diff.includes(i.d)) return false;
+  if (f.len){ const mi=i.len/1609.344, [a,b]=LEN_B[f.len]; if (mi<a || mi>b) return false; }
+  if (f.gain){ if (i.gain==null) return false; const ft=i.gain*3.28084, [a,b]=GAIN_B[f.gain]; if (ft<a || ft>b) return false; }
+  if (f.rating && !(i.r>=f.rating)) return false;
+  if (f.rt.length && !f.rt.includes(i.rt)) return false;
+  for (const k of f.attr) if (!i.f.has(k)) return false;
+  for (const k of f.suit){ const ok=k==="dogs" ? i.f.has("dogs")||i.f.has("dogs-leash") : k==="paved" ? i.f.has("paved")||i.f.has("partially-paved") : i.f.has(k); if (!ok) return false; }
+  return true; }
+function filtCount(){ const f=R.filt; return f.diff.length+(f.len?1:0)+(f.gain?1:0)+(f.rating?1:0)+f.rt.length+f.attr.length+f.suit.length; }
+function fOpts(){ const m=imp();
+  return { sort:[["best","Recommended"],["pop","Most popular"],["rate","Highest rated"],["near","Closest"],["short","Shortest"],["long","Longest"],["name","A to Z"]],
+    act:[["hike","Hiking"],["bike","Biking"],["all","Hiking + biking"]],
+    diff:[["easy","Easy"],["moderate","Moderate"],["hard","Hard"]],
+    len:[["s",m?"Under 3 mi":"Under 5 km"],["m",m?"3 to 8 mi":"5 to 13 km"],["l",m?"Over 8 mi":"Over 13 km"]],
+    gain:[["lo",m?"Under 500 ft":"Under 150 m"],["mid",m?"500 to 1,500 ft":"150 to 450 m"],["hi",m?"Over 1,500 ft":"Over 450 m"]],
+    rating:[[3.5,"3.5+ ★"],[4,"4.0+ ★"],[4.5,"4.5+ ★"]],
+    rt:[["L","Loop"],["O","Out & back"],["P","Point to point"]],
+    attr:Object.entries(FEAT), suit:Object.entries(SUIT) }; }
+const FSECS=[["sort","Sort by"],["act","Activity"],["diff","Difficulty"],["len","Length"],["gain","Elevation gain"],["rating","Rating"],["rt","Route type"],["attr","Attractions"],["suit","Suitability"]];
+const FMULTI=new Set(["diff","rt","attr","suit"]);
+function fLabel(k){ const v=R.filt[k], m=new Map(fOpts()[k].map(x=>[String(x[0]),x[1]])); return Array.isArray(v) ? v.map(x=>m.get(String(x))).join(", ") : m.get(String(v))||""; }
+function fToggle(k, v){ const f=R.filt;
+  if (FMULTI.has(k)){ const i=f[k].indexOf(v); if (i<0) f[k].push(v); else f[k].splice(i,1); }
+  else if (k==="sort" || k==="act") f[k]=v;
+  else f[k]=f[k]===v ? FDEF[k] : v;
+  fSave(); if (k==="act" || k==="sort" || k==="gain") prefetchElev(); }
+const FILTER_IC='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>';
+function pillsHtml(){ const f=R.filt, n=filtCount();
+  const p=(k, def)=>{ const v=f[k], on=Array.isArray(v) ? v.length>0 : k==="sort" ? v!=="best" : k==="act" ? v!=="hike" : !!v;
+    return `<button type="button" class="fpill${on?" on":""}" data-f="${k}">${esc(k==="sort" ? "Sort: "+fLabel(k) : k==="act" ? fLabel(k) : on ? fLabel(k) : def)} &#9662;</button>`; };
+  return `<div class="fpills" role="toolbar" aria-label="Filters"><button type="button" class="fpill${n?" on":""}" data-f="">${FILTER_IC}Filters${n?` (${n})`:""}</button>${p("act")}${p("diff","Difficulty")}${p("len","Length")}${p("gain","Elevation gain")}${p("rating","Rating")}${p("attr","Attractions")}${p("suit","Suitability")}${p("rt","Route type")}${p("sort")}</div>`; }
+function openFilters(sec){ const d=$("#filters"); fillFilters(); if (!d.open) d.showModal();
+  const el=sec && d.querySelector(`[data-sec="${sec}"]`); d.scrollTop=el ? el.offsetTop-60 : 0; }
+function fillFilters(){ const f=R.filt, o=fOpts();
+  const notes={ rating:"AllTrails star ratings, so only AllTrails trails match.", attr:"From AllTrails, or guessed from the trail's name for other trails.", suit:"From AllTrails, or from OpenStreetMap tags for other trails.", gain:"Trails whose climb hasn't loaded yet are left out." };
+  $("#fBody").innerHTML=FSECS.map(([k,l])=>`<div class="fsec" data-sec="${k}"><h3>${l}</h3><div class="opts">${o[k].map(([v,lab])=>{ const on=FMULTI.has(k) ? f[k].includes(v) : f[k]===v;
+      return `<button type="button" class="opt" data-k="${k}" data-v="${esc(v)}" aria-pressed="${on}">${esc(lab)}</button>`; }).join("")}</div>${notes[k]?`<p class="note" style="margin:6px 0 0">${notes[k]}</p>`:""}</div>`).join("");
+  $("#fBody").querySelectorAll(".opt").forEach(b=>b.onclick=()=>{ const k=b.dataset.k; fToggle(k, k==="rating" ? +b.dataset.v : b.dataset.v); const y=$("#filters").scrollTop; fillFilters(); $("#filters").scrollTop=y; render(); });
+  const n=R.center ? listTrails().length+atOnly().length : 0; $("#fShow").textContent=R.center ? `Show ${n} trail${n===1?"":"s"}` : "Done"; }
+$("#fClear").onclick=()=>{ Object.assign(R.filt, { diff:[], len:"", gain:"", rating:0, rt:[], attr:[], suit:[] }); fSave(); fillFilters(); render(); };
+
+/* ================= trail cards (photo on top, heart to save) ================= */
+const HEART='<svg class="hs" viewBox="0 0 24 24"><path d="M12 20s-7-4.3-9-8.6C1.6 8.2 3.6 4.6 7 4.6c2 0 3.3 1.1 5 3 1.7-1.9 3-3 5-3 3.4 0 5.4 3.6 4 6.8-2 4.3-9 8.6-9 8.6z"/></svg>';
+function placeOf(t){ const a=atFor(t), ar=Array.isArray(R.areas[t.id]) ? R.areas[t.id] : S.saved[t.id]?.areas;
+  return a?.loc || (ar||[]).map(x=>x.n).find(n=>atNorm(n)!==atNorm(t.name)) || ""; }
+function thumbCached(id){ return R.thumbHtml[id]; }
+let thumbIO=null; const thumbQ=[]; let thumbBusy=0;
+function thumbObserve(root){
+  if (!("IntersectionObserver" in window)){ root.querySelectorAll(".cimg[data-thumb]:not(.done)").forEach(fillThumb); return; }
+  thumbIO??=new IntersectionObserver(es=>{ for (const e of es) if (e.isIntersecting){ thumbIO.unobserve(e.target); fillThumb(e.target); } }, { rootMargin:"300px" });
+  root.querySelectorAll(".cimg[data-thumb]:not(.done)").forEach(el=>thumbIO.observe(el)); }
+function fillThumb(el){ if (el.classList.contains("done")) return; el.classList.add("done");
+  const t=pvTrail(el.dataset.thumb); if (!t?.segs || !t.bbox) return;
+  const k=t.id+"|"+el.clientWidth+"x"+el.clientHeight;
+  const html=R.thumbHtml[k] || (R.thumbHtml[k]=thumbMap(t, el.clientWidth||360, el.clientHeight||150));
+  el.insertAdjacentHTML("afterbegin", html+`<div class="cphoto"></div>`);
+  thumbPhotoQ(t).then(u=>{ const ph=el.querySelector(".cphoto"); if (u && ph){ ph.style.backgroundImage=`url("${u}")`; ph.classList.add("on"); } }); }
+function thumbPhotoQ(t){ if (t.id in R.thumbs) return Promise.resolve(R.thumbs[t.id]);
+  return new Promise(ok=>{ thumbQ.push([t, ok]); pumpThumbs(); }); }
+function pumpThumbs(){ while (thumbBusy<2 && thumbQ.length){ const [t, ok]=thumbQ.shift(); thumbBusy++;
+  thumbPhoto(t).then(ok, ()=>ok(null)).finally(()=>{ thumbBusy--; pumpThumbs(); }); } }
+/* Save to list sheet, like AllTrails' heart */
+function saveDialog(t){ R.ldT=t; $("#ldName").textContent=t.name; fillLd(); const d=$("#listDlg"); if (!d.open) d.showModal(); }
+function fillLd(){ const t=R.ldT;
+  $("#ldLists").innerHTML=Object.entries(S.lists).map(([k,l])=>`<label><input type="checkbox" data-ld="${esc(k)}"${l.ids.includes(t.id)?" checked":""}> ${esc(l.name)} <span class="note">${l.ids.length}</span></label>`).join("");
+  $("#ldLists").querySelectorAll("[data-ld]").forEach(c=>c.onchange=()=>{ toggleList(t, c.dataset.ld, c.checked); fillLd(); }); }
+$("#ldNew").onsubmit=e=>{ e.preventDefault(); const n=$("#ldNewName").value.trim(); if (!n || !R.ldT) return; const k="l"+Date.now(); S.lists[k]={ name:n, ids:[] }; $("#ldNewName").value=""; toggleList(R.ldT, k, true); fillLd(); };
+document.querySelectorAll("dialog [data-close]").forEach(b=>b.addEventListener("click", ()=>b.closest("dialog").close()));
+document.querySelectorAll("dialog").forEach(d=>d.addEventListener("click", e=>{ if (e.target===d){ const r=d.getBoundingClientRect(); if (e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom) d.close(); } }));
 
 /* place search with suggestions */
 let sugT;
@@ -1603,7 +1859,8 @@ function mapFull(on){ const b=document.body, was=b.classList.contains("mapfull")
 $("#mapBtn").onclick=()=>{ const on=!document.body.classList.contains("mapfull"); if (!on) closePreview(); mapFull(on); };
 mapFull(false);
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
-function setTab(t){ R.tab=t; if (t!=="explore") $("#areaBtn").classList.remove("show");
+function setTab(t){ if (t!=="explore" && (t!==R.tab || document.body.classList.contains("mapfull"))){ closePreview(); mapFull(false); if (document.body.dataset.size==="peek") sheet("half"); }
+  R.tab=t; document.body.dataset.tab=t; if (t!=="explore") $("#areaBtn").classList.remove("show");
   document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-selected", b.dataset.tab===t)); closeTrail(true); render(); }
 
 /* Coalesce background refreshes (climb data, weather, photos) into one redraw, keep the scroll position,
@@ -1616,30 +1873,31 @@ function renderSoon(ms){ const due=Date.now()+(ms||0); if (rsT){ if (due>=rsDue)
 function render(){
   const b=$("#body");
   if (R.sel) { renderDetail(b); return; }
-  if (R.tab==="explore") renderExplore(b); else if (R.tab==="saved") renderSaved(b); else renderRecord(b);
+  if (R.tab==="explore") renderExplore(b); else if (R.tab==="saved") renderSaved(b); else if (R.tab==="profile") renderProfile(b); else renderRecord(b);
   drawTrails(); drawSaved();
 }
 function card(t, extra){
-  const d=difficulty(t), saved=!!S.saved[t.id];
-  const dist=R.center && R.tab==="explore" ? fd(R.center,t.head) : null;
-  return `<button class="card" data-id="${esc(t.id)}">
-    <span class="nm">${esc(t.name)}${saved?" <span title='Saved' style='color:var(--accent)'>&#9829;</span>":""}</span>
-    <span class="meta"><span class="chip ${d}">${d}</span>${t.kind==="bike"?'<span class="chip plain">Bike trail</span>':t.kind==="shared"?'<span class="chip plain">Hike + bike</span>':""}${S.saved[t.id]?.offline?'<span class="chip plain">Offline</span>':""}${(a=>a?`<span class="chip at">AllTrails ★ ${a.r.toFixed(1)}</span>${popChip(a)}`:"")(atFor(t))}<span>${fmtLen(t.loop?t.len:t.len*2)} ${t.loop?"loop":"round trip"}</span>${t.elev?`<span>&#8599; ${fmtEl(t.elev.gain+(t.loop?0:t.elev.loss))}</span>`:""}${dist!=null?`<span>${fmtLen(dist)} away</span>`:""}${extra||""}</span>
-  </button>`;
+  const d=difficulty(t), a=atFor(t), saved=!!S.saved[t.id], i=tinfo(t), loc=placeOf(t);
+  const dist=R.center && R.tab==="explore" ? fd(R.center,t.head) : null, th=R.thumbs[t.id];
+  return `<div class="card tcard" data-id="${esc(t.id)}" role="button" tabindex="0">
+    <div class="cimg" data-thumb="${esc(t.id)}"><div class="cbadges">${a?'<span class="chip at">AllTrails</span>':""}${popChip(a)}${S.saved[t.id]?.offline?'<span class="chip plain">Offline</span>':""}</div>
+      <button type="button" class="heart${saved?" on":""}" data-heart="${esc(t.id)}" aria-label="${saved?"Saved. Change lists":"Save"}">${HEART}</button></div>
+    <div class="cbody"><span class="nm">${esc(t.name)}</span>
+      ${loc||dist!=null?`<span class="cline">${[loc&&esc(loc), dist!=null&&fmtLen(dist)+" away"].filter(Boolean).join(" · ")}</span>`:""}
+      <span class="cline"><b class="dtx ${d}">${DLAB[d]}</b>${a?`<span>· ★ ${a.r.toFixed(1)}</span>`:""}${t.kind==="bike"?"<span>· Bike trail</span>":t.kind==="shared"?"<span>· Hike + bike</span>":""}</span>
+      <span class="cline"><span>Length ${fmtLen(i.len)}</span>${i.gain!=null?`<span>· &#8599; ${fmtEl(i.gain)}</span>`:""}<span>· Est. ${fmtDur(i.est)}</span>${extra?`<span>· ${extra}</span>`:""}</span>
+    </div></div>`;
 }
-function bindCards(root){ const ids=[...root.querySelectorAll(".card[data-id]")].map(c=>c.dataset.id);
-  root.querySelectorAll(".card[data-id]").forEach(c=>{ c.onclick=()=>previewTrail(c.dataset.id, ids);
-  c.onmouseenter=()=>highlight(c.dataset.id,true); c.onmouseleave=()=>highlight(c.dataset.id,false); }); }
+function bindCards(root){ const cs=[...root.querySelectorAll(".card[data-id]")], ids=cs.map(c=>c.dataset.id);
+  cs.forEach(c=>{ const go=()=>previewTrail(c.dataset.id, ids); c.onclick=go; c.onkeydown=e=>{ if (e.key==="Enter" && e.target===c) go(); };
+    c.onmouseenter=()=>highlight(c.dataset.id,true); c.onmouseleave=()=>highlight(c.dataset.id,false); });
+  root.querySelectorAll("[data-heart]").forEach(h=>h.onclick=e=>{ e.stopPropagation(); const t=pvTrail(h.dataset.heart); if (t) saveDialog(t); });
+  root.querySelectorAll("[data-nid]").forEach(c=>c.onclick=()=>{ R.pvBack=null; openTrail(c.dataset.nid); });
+  thumbObserve(root); }
 
 function renderExplore(b){
   const f=R.filt;
-  const opt=(v,l,cur)=>`<option value="${v}"${v===cur?" selected":""}>${l}</option>`;
-  let h=`<div class="filters">
-    <select id="fAct" aria-label="Activity">${opt("hike","Hiking",f.act)}${opt("bike","Biking",f.act)}${opt("all","Hike + bike",f.act)}</select>
-    <select id="fDiff" aria-label="Difficulty">${opt("","Any difficulty",f.diff)}${opt("easy","Easy",f.diff)}${opt("moderate","Moderate",f.diff)}${opt("hard","Hard",f.diff)}</select>
-    <select id="fLen" aria-label="Length">${opt("","Any length",f.len)}${opt("s",imp()?"Under 3 mi":"Under 5 km",f.len)}${opt("m",imp()?"3 to 8 mi":"5 to 13 km",f.len)}${opt("l",imp()?"Over 8 mi":"Over 13 km",f.len)}</select>
-    <select id="fSort" aria-label="Sort">${opt("best","Recommended",f.sort)}${opt("pop","Most popular",f.sort)}${opt("near","Nearest",f.sort)}${opt("short","Shortest",f.sort)}${opt("long","Longest",f.sort)}${opt("name","A to Z",f.sort)}</select>
-  </div>`;
+  let h=pillsHtml();
   if (R.searching && !R.trails.length && !atOnly().length) h+=`<p class="count"><span class="spin"></span> Looking for trails…</p>`;
   else if (R.searchErr && !R.trails.length) h+=`<div class="empty"><strong>Search failed</strong>${esc(R.searchErr)}<p><button class="btn" id="retry">Try again</button></p></div>`;
   else if (!R.center) h+=`<div class="empty"><strong>Find a trail</strong>Search a town or park above, or zoom the map into an area.<p><button class="btn primary" id="nearMe">Trails near me</button></p></div>`;
@@ -1653,15 +1911,14 @@ function renderExplore(b){
     const near=v.length ? [] : closestTrails(10);
     if (v.length) h+=v.map(t=>card(t)).join("");
     else if (near.length) h+=`<div class="lab">Closest trails</div><p class="note" style="margin:0 0 8px">None are on this part of the map yet. <a href="#" id="showNear">Show them on the map</a></p>`+near.map(t=>card(t)).join("");
+    else if (!R.searching && filtCount()) h+=`<div class="empty"><strong>No matching trails</strong>None of the trails here match your filters. <p><button class="btn" id="fClear2">Clear filters</button></p></div>`;
     else if (!R.searching) h+=`<div class="empty"><strong>No trails on this part of the map</strong>There are no named trails near here. Try zooming out or moving the map.</div>`;
     const ao=atOnly(); if (ao.length) h+=`<div class="lab atlab">More on AllTrails (${ao.length})</div><p class="note" style="margin:0 0 8px">AllTrails routes with no matching trail on the map here. Tap one to find it on the map, then view and save it like any trail.</p>`+ao.map(atCard).join(""); }
     setTimeout(()=>bindAtCards(b),0);
   b.innerHTML=h;
   const mfl=$("#mfLink"); if (mfl) mfl.onclick=e=>{ e.preventDefault(); openSettings(); };
-  $("#fAct").onchange=e=>{ f.act=e.target.value; try { localStorage.setItem(KEY+".act", f.act); } catch(_){} render(); prefetchElev(); };
-  $("#fDiff").onchange=e=>{ f.diff=e.target.value; render(); };
-  $("#fLen").onchange=e=>{ f.len=e.target.value; render(); };
-  $("#fSort").onchange=e=>{ f.sort=e.target.value; render(); prefetchElev(); };
+  b.querySelectorAll("[data-f]").forEach(x=>x.onclick=()=>openFilters(x.dataset.f));
+  $("#fClear2")&&($("#fClear2").onclick=()=>$("#fClear").click());
   $("#showNear")&&($("#showNear").onclick=e=>{ e.preventDefault(); showNearby(); });
   $("#retry")&&($("#retry").onclick=e=>{ e.preventDefault?.(); searchArea(); });
   $("#nearMe")&&($("#nearMe").onclick=()=>{ if (!navigator.geolocation) return toast("This browser can't share your location.");
@@ -1716,6 +1973,7 @@ async function loadExtras(t){
   if (t.segs && R.media[t.id]==null) jobs.push(loadMedia(t).then(x=>{ R.media[t.id]=x; }).catch(()=>{ R.media[t.id]="err"; }));
   if (!t.segs){ if (R.hl[t.id]==null) R.hl[t.id]=S.saved[t.id]?.hl||[]; if (R.media[t.id]==null) R.media[t.id]="err"; }
   if (R.areas[t.id]==null) jobs.push(loadAreas(t));
+  if (R.air[hk]==null) jobs.push(getAir(t.head).then(v=>{ R.air[hk]=v??"err"; }, ()=>{ R.air[hk]="err"; }));
   const dk=S.home ? S.home.lat+","+S.home.lng+">"+hk : null;
   if (dk && !R.drive[dk]) jobs.push((async()=>{ try { R.drive[dk]=await getDrive(t.head); } catch(e){ R.drive[dk]="err"; } })());
   await Promise.all(jobs.map(j=>j.then(()=>{ if (R.sel===t) renderSoon(150); })));
@@ -1724,31 +1982,41 @@ const WX={0:["☀️","Clear"],1:["🌤️","Mostly clear"],2:["⛅","Partly clo
 
 function renderDetail(b){
   const t=R.sel, d=difficulty(t), hk=t.head.join(",");
-  const rtLen=t.loop?t.len:t.len*2, upRt=t.elev?(t.elev.gain+(t.loop?0:t.elev.loss)):null;
-  const [lv,lu]=fmtLenV(rtLen), ev=upRt!=null?fmtElV(upRt):null;
+  const a=atFor(t), inf=tinfo(t), [lv,lu]=fmtLenV(inf.len), ev=inf.gain!=null?fmtElV(inf.gain):null, sv=S.saved[t.id], loc=placeOf(t), navOn=R.nav?.t.id===t.id;
+  const dirUrl=/iPhone|iPad|iPod/.test(navigator.userAgent) ? `https://maps.apple.com/?daddr=${t.head[0].toFixed(6)},${t.head[1].toFixed(6)}` : `https://www.google.com/maps/dir/?api=1&destination=${t.head[0].toFixed(6)},${t.head[1].toFixed(6)}`;
+  const tags=[RT[inf.rt]?RT[inf.rt][0].toUpperCase()+RT[inf.rt].slice(1):"", t.kind==="bike"?"Bike trail":t.kind==="shared"?"Hike + bike":"",
+    t.partial?"Section shown":"", t.tags?.network&&/^(n|i)wn$/.test(t.tags.network)?"Long-distance":"",
+    ...(a?.a||[]).map(x=>ACTLAB[x]).filter(Boolean), ...[...inf.f].map(x=>TAGLAB[x]).filter(Boolean)].filter(Boolean);
   let h=`<button class="back" id="back">&#8592; ${R.tab==="explore"?"All trails":R.tab==="saved"?"Saved":"Back"}</button>
-  <h2 class="dname">${esc(t.name)}</h2>
-  <div class="row"><span class="chip ${d}">${d}</span><span class="chip plain">${t.loop?"Loop":"Out &amp; back"}</span>${t.kind==="bike"?'<span class="chip plain">Bike trail</span>':t.kind==="shared"?'<span class="chip plain">Hike + bike</span>':""}${t.partial?`<span class="chip plain" title="Part of this route is outside the searched area">Section shown</span>`:""}${t.tags?.network&&/^(n|i)wn$/.test(t.tags.network)?`<span class="chip plain">Long-distance</span>`:""}</div>
   ${t.segs?'<div id="pvSlot" class="pvslot"></div>':""}
+  <h2 class="dname">${esc(t.name)}</h2>
+  <p class="dsub"><b class="dtx ${d}">${DLAB[d]}</b>${a?`<span>· ★ ${a.r.toFixed(1)}</span><span class="chip at">AllTrails</span>`:""}${loc?`<span>· ${esc(loc)}</span>`:""}</p>
+  <div class="acts">
+    <button class="act pri" id="navBtn"${t.segs?"":" disabled"}><i><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 20 21l-8-4.5L4 21z"/></svg></i>${navOn?"End":"Navigate"}</button>
+    <a class="act" id="dirBtn" href="${dirUrl}" target="_blank" rel="noopener"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2.5 21.5 12 12 21.5 2.5 12z"/><path d="M9 14v-3h5.5M12.5 8.5l2.5 2.5-2.5 2.5"/></svg></i>Directions</a>
+    <button class="act${sv?" on":""}" id="saveBtn"><i>${HEART}</i>${sv?"Saved":"Save"}</button>
+    <button class="act" id="dlBtn"${t.segs?"":" disabled"}><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></i>${sv?.offline?"Offline":R.offBusy===t.id?"Saving…":"Download"}</button>
+    <button class="act" id="shareOne"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5M5 12v8h14v-8"/></svg></i>Share</button>
+  </div>
   <div class="stats">
-    <div class="stat"><div class="v">${lv} <small>${lu}</small></div><div class="k">${t.loop?"Loop length":"Round trip"}</div></div>
+    <div class="stat"><div class="v">${lv} <small>${lu}</small></div><div class="k">Length</div></div>
     <div class="stat"><div class="v">${ev?`${ev[0]} <small>${ev[1]}</small>`:t.elevErr?"—":'<span class="spin"></span>'}</div><div class="k">Elev. gain</div></div>
-    <div class="stat"><div class="v">${t.elev||t.elevErr?fmtDur(estHours(t)):'<span class="spin"></span>'}</div><div class="k">Est. time</div></div>
-  </div>`;
-  if (!t.loop) h+=`<p class="note" style="margin:-4px 0 6px">One way: ${fmtLen(t.len)}${t.elev?`, ${fmtEl(t.elev.gain)} up and ${fmtEl(t.elev.loss)} down from the trailhead`:""}.</p>`;
-  if (t.segs){ const off=S.saved[t.id]?.offline;
-    h+=`<div class="row" style="margin:4px 0 8px"><button class="btn primary" id="navBtn">${R.nav?.t.id===t.id?"End navigation":"Navigate this trail"}</button></div>`;
-    if (!off && !R.nav) h+=`<p class="note" style="margin:-2px 0 8px">No signal on the trail? Save it to a list and download its offline map below first.</p>`; }
+    <div class="stat"><div class="v">${a?.m||t.elev||t.elevErr?fmtDur(inf.est):'<span class="spin"></span>'}</div><div class="k">Est. time</div></div>
+  </div>
+  <p class="desc">${esc(describe(t, inf, a, loc))}</p>
+  ${tags.length?`<div class="tagchips">${tags.map(x=>`<span class="tagc">${esc(x)}</span>`).join("")}</div>`:""}`;
+  if (!t.loop) h+=`<p class="note" style="margin:2px 0 6px">One way: ${fmtLen(t.len)}${t.elev?`, ${fmtEl(t.elev.gain)} up and ${fmtEl(t.elev.loss)} down from the trailhead`:""}.</p>`;
+  if (t.segs && !sv?.offline && !R.nav) h+=`<p class="note" style="margin:2px 0 8px">No signal on the trail? Tap Download first so the map works offline.</p>`;
   h+=highlightsHtml(t)+mediaHtml(t);
   if (t.elev) h+=`<div class="lab">Elevation profile</div>${profileSvg(t)}<p class="note">High point ${fmtEl(t.elev.max)}, low point ${fmtEl(t.elev.min)}. Drag across the chart to follow it on the map.</p>`;
   else if (t.elevErr) h+=`<p class="note">Elevation data is unavailable right now.</p>`;
 
   const g=`https://www.google.com/maps/dir/?api=1&destination=${t.head[0].toFixed(6)},${t.head[1].toFixed(6)}`;
-  const a=`https://maps.apple.com/?daddr=${t.head[0].toFixed(6)},${t.head[1].toFixed(6)}`;
-  h+=`<div class="box"><div class="lab" style="margin-top:0">Trailhead</div>
+  const am=`https://maps.apple.com/?daddr=${t.head[0].toFixed(6)},${t.head[1].toFixed(6)}`;
+  h+=`<div class="box"><div class="lab" style="margin-top:0">Getting there</div>
     <div class="coords">${t.head[0].toFixed(6)}, ${t.head[1].toFixed(6)}</div>
     <p class="note" style="margin:2px 0 8px">${esc(t.headSrc||"")}</p>
-    <div class="row"><a class="btn primary" href="${g}" target="_blank" rel="noopener">Google Maps</a><a class="btn" href="${a}" target="_blank" rel="noopener">Apple Maps</a><button class="btn" id="copyC">Copy</button></div>
+    <div class="row"><a class="btn primary" href="${g}" target="_blank" rel="noopener">Google Maps</a><a class="btn" href="${am}" target="_blank" rel="noopener">Apple Maps</a><button class="btn" id="copyC">Copy</button></div>
     <p class="note" style="margin:8px 0 0" id="driveLine">${driveLine(t)}</p></div>`;
 
   const today=new Date().toLocaleDateString("en-CA"), wxAll=R.wx[hk], wx=Array.isArray(wxAll) ? wxAll.filter(x=>x.date>=today) : wxAll; // a cached forecast drops days already past
@@ -1759,14 +2027,14 @@ function renderDetail(b){
     h+=`<div class="week">`+wx.map((x,i)=>{ const dn=x.date===today?"Today":new Date(x.date+"T12:00").toLocaleDateString(undefined,{weekday:"short"});
       const w=WX[x.code]||["·",""]; return `<div title="${esc(w[1])}, wind ${x.wind} ${imp()?"mph":"km/h"}"><div class="dn">${dn}</div><div class="ic">${w[0]}</div><div class="hi">${x.hi}°</div><div class="lo">${x.lo}°</div><div class="pp">${x.pp??0}%</div></div>`; }).join("")+`</div>`;
     const t0=wx[0]; if (t0.set && t0.date===today) h+=`<p class="note" style="margin:8px 0 0">Today: ${esc((WX[t0.code]||[,""])[1])}, wind up to ${t0.wind} ${imp()?"mph":"km/h"}. Sunrise ${tm(t0.rise)}, sunset ${tm(t0.set)}.</p>`; }
+  const aq=R.air[hk]; if (typeof aq==="number"){ const [al, ac]=aqiLab(aq); h+=`<p class="note" style="margin:6px 0 0">Air quality now: <span class="aqi" style="color:${ac}">${aq} ${al}</span> (US AQI)</p>`; }
   h+=`</div>`;
 
-  const ids=Object.entries(S.lists);
-  h+=`<div class="box"><div class="lab" style="margin-top:0">Save to a list</div><div class="lists">`+
-    ids.map(([k,l])=>`<label><input type="checkbox" data-list="${esc(k)}"${l.ids.includes(t.id)?" checked":""}> ${esc(l.name)}</label>`).join("")+`</div>`;
-  if (S.saved[t.id]){ const sv=S.saved[t.id];
-    h+=`<div class="lab">Your notes</div><textarea class="txt" id="notes" placeholder="Conditions, parking, who you went with…">${esc(sv.notes||"")}</textarea>
-      <div class="lab">Date hiked</div><input class="txt" type="date" id="hiked" value="${esc(sv.hiked||"")}">`; }
+  h+=`<div class="box"><div class="lab" style="margin-top:0">Your review</div><div class="stars" role="group" aria-label="Your rating">${[1,2,3,4,5].map(n=>`<button type="button" class="star${(sv?.stars||0)>=n?" on":""}" data-star="${n}" aria-label="${n} star${n>1?"s":""}">&#9733;</button>`).join("")}</div>`;
+  if (sv) h+=`<div class="lab">Your notes</div><textarea class="txt" id="notes" placeholder="How was it? Conditions, parking, who you went with…">${esc(sv.notes||"")}</textarea>
+      <div class="lab">Date hiked</div><input class="txt" type="date" id="hiked" value="${esc(sv.hiked||"")}">
+      <p class="note" style="margin:8px 0 0">In your lists: ${esc(Object.values(S.lists).filter(l=>l.ids.includes(t.id)).map(l=>l.name).join(", ")||"none")}. <a href="#" id="editLists">Change</a></p>`;
+  else h+=`<p class="note" style="margin:6px 0 0">Rate it to mark it completed and add notes. Reviews stay on this phone.</p>`;
   h+=`</div>`;
 
   const tg=t.tags||{}, rows=[];
@@ -1785,13 +2053,24 @@ function renderDetail(b){
 
   const off=S.saved[t.id]?.offline;
   h+=`<div class="box"><div class="lab" style="margin-top:0">Offline</div>${S.saved[t.id]?(off?`<p class="note" style="margin:0 0 8px">Map saved for offline use (${off.tiles} tiles, ${esc(off.style)}) on ${new Date(off.at).toLocaleDateString()}. The trail, profile and last forecast are saved too.</p><button class="btn" id="offBtn"${R.offBusy===t.id?" disabled":""}>Update offline map</button>`:`<p class="note" style="margin:0 0 8px">Download this trail's map so it works with no signal. Uses the current map style (${esc(R.base)}).</p><button class="btn primary" id="offBtn"${R.offBusy===t.id?" disabled":""}>Download for offline</button>`):`<p class="note" style="margin:0">Save this trail to a list to download its map for offline use.</p>`}</div>`;
-  h+=`<div class="row" style="margin-top:14px"><button class="btn" id="gpx"${t.segs?"":" disabled"}>Download GPX</button><button class="btn" id="shareOne">Share</button></div>`;
+  const near=R.trails.filter(x=>x.id!==t.id && x.segs).map(x=>[fd(t.head,x.head),x]).sort((p,q)=>p[0]-q[0]).slice(0,8).map(p=>p[1]);
+  if (near.length) h+=`<div class="lab">Nearby trails</div><div class="near">${near.map(x=>{ const xd=difficulty(x), xa=atFor(x), xi=tinfo(x);
+    return `<div class="ncard" data-nid="${esc(x.id)}" role="button" tabindex="0"><div class="cimg" data-thumb="${esc(x.id)}"></div><div class="cbody"><span class="nm">${esc(x.name)}</span><span class="cline"><b class="dtx ${xd}">${DLAB[xd]}</b>${xa?`<span>· ★ ${xa.r.toFixed(1)}</span>`:""}</span><span class="cline">${fmtLen(xi.len)} · ${fmtLen(fd(t.head,x.head))} away</span></div></div>`; }).join("")}</div>`;
+  h+=`<div class="row" style="margin-top:14px"><button class="btn" id="gpx"${t.segs?"":" disabled"}>Download GPX</button></div>`;
   const keep=b.scrollTop; b.innerHTML=h; b.scrollTop=R._detailId===t.id?keep:0; R._detailId=t.id;
   attachPreview(t);
 
   $("#back").onclick=()=>{ const back=R.pvBack; R.pvBack=null; closeTrail(); if (back && pvTrail(back)) previewTrail(back); else sheet("half"); };
   $("#copyC").onclick=()=>copy(t.head[0].toFixed(6)+", "+t.head[1].toFixed(6), "Coordinates copied");
-  b.querySelectorAll("[data-list]").forEach(c=>c.onchange=()=>toggleList(t, c.dataset.list, c.checked));
+  $("#saveBtn").onclick=()=>saveDialog(t);
+  $("#editLists")&&($("#editLists").onclick=e=>{ e.preventDefault(); saveDialog(t); });
+  $("#dlBtn").onclick=()=>{ if (S.saved[t.id]?.offline){ toast("This trail's map is already saved for offline use."); return; }
+    if (!S.saved[t.id]) toggleList(t, "want", true); saveOffline(t); render(); };
+  b.querySelectorAll("[data-star]").forEach(x=>x.onclick=()=>{ const n=+x.dataset.star;
+    if (!S.saved[t.id]) toggleList(t, "done", true);
+    const s2=S.saved[t.id]; s2.stars=s2.stars===n ? 0 : n; if (s2.stars && !S.lists.done.ids.includes(t.id)) S.lists.done.ids.push(t.id);
+    save(); render(); });
+  bindCards(b);
   $("#notes")&&($("#notes").oninput=e=>{ S.saved[t.id].notes=e.target.value; save(); });
   $("#hiked")&&($("#hiked").onchange=e=>{ S.saved[t.id].hiked=e.target.value; save(); });
   $("#navBtn")&&($("#navBtn").onclick=()=>{ if (R.nav?.t.id===t.id) stopNav(); else startNav(t); });
@@ -1800,6 +2079,19 @@ function renderDetail(b){
   $("#shareOne").onclick=()=>shareCode({ n:t.name, t:[mini(t)] }, t.name);
   bindProfile(t);
 }
+function describe(t, i, a, loc){
+  const rt={ L:"loop", O:"out-and-back", P:"point-to-point" }[i.rt]||"";
+  const hard={ easy:"an easy route", moderate:"a moderately challenging route", hard:"a challenging route" }[i.d];
+  let s=`Explore this ${fmtLen(i.len)} ${rt} trail${loc?` near ${loc}`:""}. Generally considered ${hard}, it takes an average of ${fmtDur(i.est)} to complete.`;
+  const acts=(a?.a||[]).map(x=>ACTLAB[x]?.toLowerCase()).filter(Boolean).slice(0,3);
+  if (acts.length) s+=` This is a great trail for ${acts.length>1?acts.slice(0,-1).join(", ")+" and "+acts.at(-1):acts[0]}.`;
+  if (a?.tf==="heavy" || (a?.p && a.p<=5)) s+=" It's a very popular area, so you'll likely meet other people while exploring.";
+  else if (a?.tf==="light") s+=" It's usually quiet, so you may have it mostly to yourself.";
+  if (i.f.has("dogs-no")) s+=" Dogs aren't allowed on this trail."; else if (i.f.has("dogs-leash")) s+=" Dogs are welcome, but must be on a leash."; else if (i.f.has("dogs")) s+=" Dogs are welcome and may be off leash in some areas.";
+  return s; }
+function aqiLab(v){ return v<=50?["Good","#2e8540"]:v<=100?["Moderate","#b8860b"]:v<=150?["Unhealthy for sensitive groups","#e67e22"]:v<=200?["Unhealthy","#c0392b"]:v<=300?["Very unhealthy","#8e44ad"]:["Hazardous","#7e0023"]; }
+async function getAir(p){ const r=await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${(+p[0]).toFixed(4)}&longitude=${(+p[1]).toFixed(4)}&current=us_aqi`);
+  if (!r.ok) throw new Error("air "+r.status); const j=await r.json(); const v=j.current?.us_aqi; return typeof v==="number" ? Math.round(v) : null; }
 function tm(iso){ return iso ? new Date(iso).toLocaleTimeString(undefined,{ hour:"numeric", minute:"2-digit" }) : "—"; }
 function driveLine(t){
   if (!S.home) return `<button class="btn" id="setHome" onclick="openSettings()">Set where you drive from</button> to see drive time.`;
@@ -1853,7 +2145,7 @@ function renderSaved(b){
     const ts=l.ids.map(id=>S.saved[id]).filter(Boolean);
     h+=`<div class="listhead"><h3>${esc(l.name)} <span class="note">${ts.length}</span></h3><span class="row">
       ${ts.length?`<button class="btn" data-share="${esc(k)}">Share</button><button class="btn" data-show="${esc(k)}">Map</button>`:""}${k!=="want"&&k!=="done"?`<button class="btn warn" data-del="${esc(k)}" aria-label="Delete list">&#10005;</button>`:""}</span></div>`;
-    h+= ts.length ? ts.map(t=>card(t, t.hiked?`<span>Hiked ${esc(t.hiked)}</span>`:"")).join("") : `<p class="note">Nothing here yet. Open a trail and tick this list.</p>`;
+    h+= ts.length ? ts.map(t=>card(t, t.hiked?`Hiked ${esc(t.hiked)}`:"")).join("") : `<p class="note">Nothing here yet. Open a trail and tick this list.</p>`;
   }
   h+=`<div class="lab">New list</div><form class="row" id="newList"><input class="txt" id="newName" placeholder="e.g. Fall colors" style="flex:1;width:auto"><button class="btn">Add</button></form>
   <div class="lab">Import</div>
@@ -1912,24 +2204,53 @@ function importGpx(text){
   } catch(e){ toast("Couldn't read a track from that GPX file."); }
 }
 
+/* ================= profile ================= */
+function renderProfile(b){
+  const done=(S.lists.done?.ids||[]).map(id=>S.saved[id]).filter(Boolean);
+  const lenOf=t=>{ const a=atFor(t); return a ? a.l : (t.loop?t.len:t.len*2); }, upOf=t=>{ const a=atFor(t), e=t.elev; return a ? a.g : e ? e.gain+(t.loop?0:e.loss) : 0; };
+  const yr=String(new Date().getFullYear()), dYr=done.filter(t=>(t.hiked||"").startsWith(yr));
+  const rs=S.recs.map(r=>recStats(r.pts)), rLen=rs.reduce((n,x)=>n+x.d,0), rUp=rs.reduce((n,x)=>n+(x.gain||0),0), rT=S.recs.reduce((n,r)=>n+(r.dur||0),0);
+  const stat=(v,k)=>`<div class="stat"><div class="v">${v}</div><div class="k">${k}</div></div>`;
+  let h=`<h2 class="dname" style="margin-top:4px">Your hiking</h2>
+  <div class="stats pstats">${stat(done.length, `Trails completed${dYr.length?` · ${dYr.length} in ${yr}`:""}`)}${stat(fmtLen(done.reduce((n,t)=>n+lenOf(t),0)), "Distance on completed trails")}${stat(fmtEl(done.reduce((n,t)=>n+upOf(t),0)), "Climbed on completed trails")}${stat(Object.keys(S.saved).length, "Saved trails")}</div>
+  <div class="lab">Recorded activities</div>
+  <div class="stats pstats">${stat(S.recs.length, "Activities")}${stat(rT?fmtDur(rT/3.6e6):"0m", "Moving time")}${stat(fmtLen(rLen), "Distance")}${stat(fmtEl(rUp), "Elevation gain")}</div>`;
+  const rv=Object.values(S.saved).filter(t=>t.stars||t.notes).sort((a,b2)=>(b2.hiked||"").localeCompare(a.hiked||"")||(b2.added||0)-(a.added||0));
+  h+=`<div class="lab">Your reviews</div>`+(rv.length ? rv.map(t=>`<div class="rv"><button class="linkish" data-open="${esc(t.id)}">${esc(t.name)}</button>
+    <div class="cline">${t.stars?`<span class="rvstars">${"★".repeat(t.stars)}${"☆".repeat(5-t.stars)}</span>`:""}${t.hiked?`<span>· Hiked ${esc(t.hiked)}</span>`:""}</div>${t.notes?`<p style="margin:6px 0 0;white-space:pre-wrap">${esc(t.notes)}</p>`:""}</div>`).join("")
+    : `<p class="note">Rate a trail on its page to review it. Reviews stay on this phone.</p>`);
+  const ds=done.slice().sort((a,b2)=>(b2.hiked||"").localeCompare(a.hiked||""));
+  h+=`<div class="listhead"><h3>Completed <span class="note">${done.length}</span></h3></div>`+(ds.length ? ds.map(t=>card(t, t.hiked?`Hiked ${esc(t.hiked)}`:"")).join("") : `<p class="note">Trails you finish with Navigate, rate, or add to Completed show up here.</p>`);
+  h+=`<div class="row" style="margin-top:14px"><button class="btn" id="pSet">Settings</button><button class="btn" id="pBk">Save backup file</button></div>`;
+  b.innerHTML=h; bindCards(b);
+  b.querySelectorAll("[data-open]").forEach(x=>x.onclick=()=>openTrail(x.dataset.open));
+  $("#pSet").onclick=openSettings; $("#pBk").onclick=backupSave;
+}
+
 /* ================= recording ================= */
 function renderRecord(b){
   const r=R.rec;
-  let h=`<p class="note">Records your hike with GPS. Keep this page open: phones pause location when the screen locks or you switch apps, so the app asks to keep the screen awake.</p>`;
+  let h=`<h2 class="dname" style="margin-top:4px">Navigate</h2>`;
+  if (R.nav) h+=`<div class="box" style="margin-top:6px"><div class="lab" style="margin-top:0">Following a trail</div><p style="margin:0 0 8px;font-weight:700">${esc(R.nav.t.name)}</p><div class="row"><button class="btn" id="navOpen">Trail details</button><button class="btn warn" id="navStop">End</button></div></div>`;
+  else h+=`<p class="note">To follow a trail with off-trail alerts, open it and tap <b>Navigate</b>. Your hike is recorded too, and finishing marks the trail completed. Or record a hike without a trail below.</p>`;
+  h+=`<p class="note">Keep this page open while you hike: phones pause location when the screen locks or you switch apps, so the app keeps the screen awake.</p>`;
   if (r){ const st=recStats(r.pts);
     h+=`<div class="recstats"><div class="stat"><div class="recbig" id="rTime">${fmtDur(((r.paused?r.pausedAt:Date.now())-r.start-r.idle)/3.6e6)}</div><div class="k">Moving time</div></div>
       <div class="stat"><div class="recbig">${fmtLenV(st.d).join(" ")}</div><div class="k">Distance</div></div>
       <div class="stat"><div class="recbig">${st.gain==null?"—":fmtElV(st.gain).join(" ")}</div><div class="k">Elev. gain (GPS)</div></div>
       <div class="stat"><div class="recbig">${r.pts.length}</div><div class="k">GPS points</div></div></div>
       <div class="row"><button class="btn" id="rPause">${r.paused?"Resume":"Pause"}</button><button class="btn primary" id="rStop">Finish and save</button><button class="btn warn" id="rDiscard">Discard</button></div>`;
-  } else h+=`<p><button class="btn primary" id="rStart">Start recording</button></p>`;
-  h+=`<div class="lab">Your recordings</div>`;
+  } else h+=`<p><button class="btn${R.nav?"":" primary"}" id="rStart">Record without a trail</button></p>`;
+  if (r?.trail) h+=`<p class="note" style="margin:8px 0 0">Recording your hike on ${esc(r.name||"this trail")}.</p>`;
+  h+=`<div class="lab">Your activities</div>`;
   h+= S.recs.length ? S.recs.slice().reverse().map(x=>{ const st=recStats(x.pts); return `<div class="card" style="cursor:default"><span class="nm">${esc(x.name)}</span>
     <span class="meta"><span>${fmtLen(st.d)}</span><span>${fmtDur(x.dur/3.6e6)}</span>${st.gain!=null?`<span>&#8599; ${fmtEl(st.gain)}</span>`:""}</span>
     <span class="row" style="margin-top:6px"><button class="btn" data-rshow="${x.id}">Map</button><button class="btn" data-rgpx="${x.id}">GPX</button><button class="btn warn" data-rdel="${x.id}">Delete</button></span></div>`; }).join("")
     : `<p class="note">No recordings yet.</p>`;
   b.innerHTML=h;
   $("#rStart")&&($("#rStart").onclick=()=>startRec());
+  $("#navOpen")&&($("#navOpen").onclick=()=>openTrail(R.nav.t.id));
+  $("#navStop")&&($("#navStop").onclick=()=>stopNav());
   $("#rPause")&&($("#rPause").onclick=()=>{ const r=R.rec; if (r.paused){ r.idle+=Date.now()-r.pausedAt; r.paused=false; } else { r.paused=true; r.pausedAt=Date.now(); } recPersist(true); render(); });
   $("#rStop")&&($("#rStop").onclick=stopRec);
   $("#rDiscard")&&($("#rDiscard").onclick=()=>{ if (confirm("Discard this recording?")) endRec(); });
@@ -1948,7 +2269,7 @@ const REC_KEY=KEY+".rec";
 let wake=null, recTick=null, recSaved=0;
 function recPersist(force){ const r=R.rec; if (!r) return;
   if (!force && r.pts.length-recSaved<5) return; recSaved=r.pts.length;
-  try { localStorage.setItem(REC_KEY, JSON.stringify({ start:r.start, idle:r.idle, paused:r.paused, pausedAt:r.pausedAt, pts:r.pts })); } catch(e){} }
+  try { localStorage.setItem(REC_KEY, JSON.stringify({ start:r.start, idle:r.idle, paused:r.paused, pausedAt:r.pausedAt, pts:r.pts, trail:r.trail||null, name:r.name||null })); } catch(e){} }
 async function recWake(){ if (R.rec && document.visibilityState==="visible") wake=await Device.keepAwake(); }
 document.addEventListener("visibilitychange", ()=>{ if (document.visibilityState==="visible") recWake(); else recPersist(true); });
 function recFix(p, e){ const r=R.rec; if (!r) return;
@@ -1974,10 +2295,15 @@ function recStatsDraw(){ const r=R.rec, box=$(".recstats"); if (!r || !box) retu
 function endRec(){ const r=R.rec; if (!r) return; gpsOff(recFix); clearInterval(recTick); recLayer.removeLayer(r.line); R.rec=null;
   try { localStorage.removeItem(REC_KEY); } catch(e){} try { wake?.release(); } catch(e){} wake=null; render(); }
 function stopRec(){ const r=R.rec; if (r.pts.length<2){ toast("Not enough GPS points to save yet."); return; }
-  const name=prompt("Name this hike", "Hike on "+new Date(r.start).toLocaleDateString()); if (name===null) return; // Cancel keeps recording
-  S.recs.push({ id:Date.now(), name:name.trim()||"Hike", start:r.start, dur:(r.paused?r.pausedAt:Date.now())-r.start-r.idle, pts:r.pts });
-  if (!save()){ S.recs.pop(); toast("Couldn't save: storage is full. Export it as GPX or delete old recordings, then try again."); return; }
-  endRec(); toast("Saved “"+(name.trim()||"Hike")+"”."); }
+  const name=prompt("Name this hike", r.name||"Hike on "+new Date(r.start).toLocaleDateString()); if (name===null) return; // Cancel keeps recording
+  const tid=r.trail; if (!finishRec(name)) return;
+  const t=tid && (R.byId[tid]||S.saved[tid]); if (t && confirm("Mark “"+t.name+"” as completed?")) markDone(t); }
+function finishRec(name){ const r=R.rec;
+  S.recs.push({ id:Date.now(), name:name.trim()||"Hike", trail:r.trail||null, start:r.start, dur:(r.paused?r.pausedAt:Date.now())-r.start-r.idle, pts:r.pts });
+  if (!save()){ S.recs.pop(); toast("Couldn't save: storage is full. Export it as GPX or delete old recordings, then try again."); return false; }
+  endRec(); toast("Saved “"+(name.trim()||"Hike")+"” to your activities."); return true; }
+function markDone(t){ if (!S.lists.done.ids.includes(t.id)) toggleList(t, "done", true);
+  const sv=S.saved[t.id]; if (sv && !sv.hiked){ sv.hiked=new Date().toLocaleDateString("en-CA"); save(); render(); } }
 function recResume(){ let o; try { o=JSON.parse(localStorage.getItem(REC_KEY)); } catch(e){}
   if (o && Array.isArray(o.pts) && o.start){ startRec(o); toast("Resumed your recording from "+new Date(o.start).toLocaleTimeString([], { hour:"numeric", minute:"2-digit" })+"."); } }
 
@@ -2337,16 +2663,16 @@ function atFor(t){ const ix=atIndex(); if (t.atId){ const x=ix.id.get(t.atId); i
 function atOnly(){ const f=R.filt, names=new Set(R.trails.map(t=>atNorm(t.name))), ids=new Set(R.trails.map(t=>t.atId).filter(Boolean)); let out=[];
   for (const a of atAreas()) for (const x of a.trails) if (!names.has(atNorm(x.n)) && !ids.has(x.id)) out.push(x);
   if (f.act==="bike") out=out.filter(x=>x.bike);
-  if (f.diff) out=out.filter(x=>AT_DIFF[x.d]===f.diff);
-  if (f.len){ const mi=x=>x.l/1609.344; out=out.filter(x=> f.len==="s" ? mi(x)<3 : f.len==="m" ? mi(x)>=3&&mi(x)<=8 : mi(x)>8); }
+  out=out.filter(x=>passF(xinfo(x)));
   return out.sort(f.sort==="pop" ? (a,b)=>(a.p??999)-(b.p??999)||b.r-a.r : (a,b)=>b.r-a.r); }
 function popChip(x){ return x?.p&&x.p<=10 ? `<span class="chip pop" title="AllTrails popularity rank in this area">&#128293; #${x.p} popular</span>` : ""; }
 function popLine(x){ const a=[]; if (x.p) a.push(`#${x.p} most popular in this area`); if (x.tf) a.push({heavy:"usually busy (heavy traffic)",moderate:"moderate traffic",light:"usually quiet (light traffic)"}[x.tf]); return a.length?`<p style="margin:0 0 8px">&#128293; ${a.join(", ")}.</p>`:""; }
 const RT={ O:"out & back", L:"loop", P:"point to point" };
-function atCard(x){ return `<div class="card atcard" role="button" tabindex="0" data-at="${x.id}">
-    <span class="nm">${esc(x.n)}</span>
-    <span class="meta"><span class="chip at">AllTrails</span>${popChip(x)}<span class="chip ${AT_DIFF[x.d]||"plain"}">${esc(x.d)}</span><span>★ ${x.r.toFixed(1)}</span><span>${fmtLen(x.l)} ${RT[x.rt]||""}</span><span>&#8599; ${fmtEl(x.g)}</span></span>
-    <span class="meta"><span>${esc(x.loc)}</span><a href="${esc(x.u)}" target="_blank" rel="noopener" class="atlink" onclick="event.stopPropagation()">AllTrails &#8599;</a></span></div>`; }
+function atCard(x){ const d=AT_DIFF[x.d]||"moderate"; return `<div class="card tcard atcard" role="button" tabindex="0" data-at="${x.id}">
+    <div class="cimg"><div class="nogeo">Tap to find it on the map</div><div class="cbadges"><span class="chip at">AllTrails</span>${popChip(x)}</div></div>
+    <div class="cbody"><span class="nm">${esc(x.n)}</span><span class="cline">${esc(x.loc)}</span>
+    <span class="cline"><b class="dtx ${d}">${esc(x.d)}</b><span>· ★ ${x.r.toFixed(1)}</span></span>
+    <span class="cline"><span>Length ${fmtLen(x.l)}</span><span>· ${RT[x.rt]||""}</span><span>· &#8599; ${fmtEl(x.g)}</span>${x.m?`<span>· Est. ${fmtDur(x.m/60)}</span>`:""}<a href="${esc(x.u)}" target="_blank" rel="noopener" class="atlink" onclick="event.stopPropagation()">AllTrails &#8599;</a></span></div></div>`; }
 function bindAtCards(root){ root.querySelectorAll(".atcard[data-at]").forEach(c=>{ c.onclick=()=>openAT(+c.dataset.at); c.onkeydown=e=>{ if (e.key==="Enter") openAT(+c.dataset.at); }; }); }
 const AT_STOP=new Set(["trail","trails","loop","the","and","to","via","of","from","lower","upper","east","west","north","south","summit","lookout","trailhead","1","2","3"]);
 const atTok=s=>atNorm(s).split(" ").filter(w=>w&&!AT_STOP.has(w));
@@ -2454,15 +2780,15 @@ function conditionsHtml(t){
 
 /* ================= trail preview card (map stays visible) ================= */
 R.thumbs={};
-function thumbMap(t, W){ // little topo map of the trail: Esri tiles + the trail line
-  const bb=t.bbox, S2=W*2; let z=16;
-  for (; z>3; z--){ const a=map.project([bb[0],bb[1]], z), b=map.project([bb[2],bb[3]], z); if (Math.abs(b.x-a.x)<S2*.7 && Math.abs(b.y-a.y)<S2*.7) break; }
-  const c=map.project([(bb[0]+bb[2])/2,(bb[1]+bb[3])/2], z), ox=c.x-S2/2, oy=c.y-S2/2;
-  let tiles=""; for (let tx=Math.floor(ox/256); tx<=Math.floor((ox+S2)/256); tx++) for (let ty=Math.floor(oy/256); ty<=Math.floor((oy+S2)/256); ty++)
+function thumbMap(t, W, H){ // little topo map of the trail: Esri tiles + the trail line, drawn at 2x and scaled down
+  H=H||W; const bb=t.bbox, S2=W*2, S3=H*2; let z=16;
+  for (; z>3; z--){ const a=map.project([bb[0],bb[1]], z), b=map.project([bb[2],bb[3]], z); if (Math.abs(b.x-a.x)<S2*.7 && Math.abs(b.y-a.y)<S3*.7) break; }
+  const c=map.project([(bb[0]+bb[2])/2,(bb[1]+bb[3])/2], z), ox=c.x-S2/2, oy=c.y-S3/2;
+  let tiles=""; for (let tx=Math.floor(ox/256); tx<=Math.floor((ox+S2)/256); tx++) for (let ty=Math.floor(oy/256); ty<=Math.floor((oy+S3)/256); ty++)
     tiles+=`<img src="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/${z}/${ty}/${tx}" style="left:${Math.round(tx*256-ox)}px;top:${Math.round(ty*256-oy)}px" alt="">`;
   const path=(t.segs||[]).map(sg=>"M"+sg.map(p=>{ const q=map.project(p, z); return (q.x-ox).toFixed(1)+" "+(q.y-oy).toFixed(1); }).join("L")).join("");
   const h=map.project(t.head, z);
-  return `<div class="tmap" style="width:${S2}px;height:${S2}px">${tiles}<svg width="${S2}" height="${S2}"><path d="${path}" fill="none" stroke="#fff" stroke-width="9" stroke-linejoin="round" stroke-linecap="round"/><path d="${path}" fill="none" stroke="${css(DCOL[difficulty(t)])}" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${(h.x-ox).toFixed(1)}" cy="${(h.y-oy).toFixed(1)}" r="7" fill="${css("--accent")}" stroke="#fff" stroke-width="3"/></svg></div>`; }
+  return `<div class="tmap" style="width:${S2}px;height:${S3}px">${tiles}<svg width="${S2}" height="${S3}"><path d="${path}" fill="none" stroke="#fff" stroke-width="9" stroke-linejoin="round" stroke-linecap="round"/><path d="${path}" fill="none" stroke="${css(DCOL[difficulty(t)])}" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${(h.x-ox).toFixed(1)}" cy="${(h.y-oy).toFixed(1)}" r="7" fill="${css("--accent")}" stroke="#fff" stroke-width="3"/></svg></div>`; }
 async function thumbPhoto(t){
   if (t.id in R.thumbs) return R.thumbs[t.id]; R.thumbs[t.id]=null;
   try { const j=await wapi("commons.wikimedia.org", { action:"query", generator:"geosearch", ggscoord:t.head[0].toFixed(5)+"|"+t.head[1].toFixed(5), ggsradius:"1500", ggslimit:"12", ggsnamespace:"6", prop:"imageinfo", iiprop:"url|mime", iiurlwidth:"320" });
@@ -2555,10 +2881,15 @@ function startNav(t){
   [meMarker, meAcc].forEach(l=>l&&map.removeLayer(l)); // Navigate shows its own dot
   gpsOn(navFix);
   map.on("dragstart", navUnfollow);
+  if (!R.rec) startRec({ trail:t.id, name:t.name });
   sheet("peek"); navDraw(); render();
 }
 function navUnfollow(){ if (R.nav && R.nav.follow){ R.nav.follow=false; navDraw(); } }
 function stopNav(silent){ const nv=R.nav; if (!nv) return;
+  if (!silent && R.rec?.trail===nv.t.id){ const r=R.rec;
+    if (r.pts.length<2) endRec();
+    else if (confirm("Save this hike to your activities and mark “"+nv.t.name+"” completed?")){ if (finishRec(r.name||nv.t.name)) markDone(nv.t); }
+    else if (confirm("Discard the recording of this hike?")) endRec(); }
   gpsOff(navFix); [meMarker, meAcc].forEach(l=>l&&!map.hasLayer(l)&&l.addTo(map)); [nv.line, nv.acc, nv.me].forEach(l=>map.hasLayer(l)&&map.removeLayer(l));
   try { nv.wake?.release(); } catch(e){} map.off("dragstart", navUnfollow); R.nav=null; document.body.classList.remove("navving"); navDraw(); if (!silent) render(); }
 function navFix(p, e){ const nv=R.nav; if (!nv) return;
