@@ -1576,7 +1576,7 @@ out center;`;
   const run=++searchRun; // a newer search makes this one's late answer irrelevant
   R.center=[c.lat,c.lng]; R.searching=true; R.searchErr=null;
   // Keep what's already loaded near here; drop searches and trails far from the view.
-  const v=map.getBounds(), dh=v.getNorth()-v.getSouth(), dw=v.getEast()-v.getWest();
+  const v=map.getBounds(), dh=Math.max(v.getNorth()-v.getSouth(), n-s), dw=Math.max(v.getEast()-v.getWest(), e-w); // a zoomed-in view searches a wider box, so keep boxes that size
   const near=[v.getSouth()-2*dh, v.getWest()-2*dw, v.getNorth()+2*dh, v.getEast()+2*dw];
   R.cov=(R.cov||[]).filter(x=>bbHolds(near, x)).slice(-12); // a kept box keeps all its trails, since they touch it
   const kept=R.trails.filter(t=>!t.id.startsWith("at") && t.bbox && bbHits(t.bbox, near));
