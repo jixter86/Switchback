@@ -3,7 +3,7 @@ import { chromium } from "playwright";
 const url = process.env.SITE || "https://jixter86.github.io/Switchback/";
 const res = []; const ck = (name, ok, info = "") => { res.push([ok ? "PASS" : "FAIL", name, info]); console.log(ok ? "PASS" : "FAIL", name, typeof info === "string" ? info : JSON.stringify(info)); };
 const W = ms => new Promise(r => setTimeout(r, ms));
-for (let i = 0; i < 40; i++) { const r = await fetch(url + "?" + Date.now()); if (r.ok && (await r.text()).includes("closestTrails")) { console.log("new build live"); break; } await W(10000); }
+for (let i = 0; i < 40; i++) { const r = await fetch(url + "?" + Date.now()); if (r.ok && (await r.text()).includes("renderProfile")) { console.log("new build live"); break; } await W(10000); }
 let mauiN = 0;
 for (let i = 0; i < 40; i++) { const r = await fetch(url + "alltrails.json?" + Date.now()); if (r.ok) { const j = await r.json(); mauiN = (j.areas.find(a => a.name === "Maui, HI")?.trails || []).length; if (mauiN >= 100) { console.log("Maui data live", mauiN); break; } } await W(10000); }
 const b = await chromium.launch();
@@ -34,12 +34,21 @@ console.log("SEARCH", Date.now() - t0, "ms", JSON.stringify(info));
 ck("Search finds trails (OSM + AllTrails)", info.n > 5 && info.at > 0 && !info.err, info);
 ck("AllTrails trails listed first", (await ev(() => { const v = visibleTrails(); const i = v.findIndex(t => !t.atId); return i < 0 || v.slice(i).every(t => !t.atId); })), info.first5);
 ck("No short connector pieces", info.short === 0, info.short);
-await step("Bike filter", async () => { const r = await ev(async () => { const s = document.querySelector("#fAct"); const o = [...s.options].map(x => x.value); const hike = visibleTrails().length; s.value = o.find(v => /bike/i.test(v) && !/hike/i.test(v)) || o[1]; s.dispatchEvent(new Event("change")); await new Promise(r => setTimeout(r, 300)); const bike = visibleTrails().length; s.value = o[0]; s.dispatchEvent(new Event("change")); return { o, hike, bike }; });
-  ck("Bike filter", r.o.length >= 3, r); });
+await step("Bike filter", async () => { await pg.click('.fpill[data-f="act"]'); await W(400);
+  const r = await ev(async () => { const o = [...document.querySelectorAll('#filters .opt[data-k="act"]')].map(x => x.dataset.v); const hike = visibleTrails().length;
+    document.querySelector('#filters .opt[data-k="act"][data-v="bike"]').click(); await new Promise(r => setTimeout(r, 300)); const bike = visibleTrails().length;
+    document.querySelector('#filters .opt[data-k="act"][data-v="hike"]').click(); document.querySelector("#filters").close(); return { o, hike, bike }; });
+  ck("Bike filter", r.o.length >= 3 && r.bike !== r.hike, r); });
 await step("AllTrails chip + link on cards", async () => { const r = await ev(() => ({ chips: document.querySelectorAll(".card[data-id] .chip.at, .card[data-id] [class*=at]").length, links: document.querySelectorAll('a[href*="alltrails.com"]').length }));
   ck("AllTrails chip + link on cards", r.chips > 0 && r.links > 0, r); });
-await step("Popularity chip + sort", async () => { const r = await ev(async () => { const chip = /popular/.test(document.querySelector("#body")?.innerText || document.body.innerText); const s = document.querySelector("#fSort"); const has = [...s.options].some(o => o.value === "pop"); s.value = "pop"; s.dispatchEvent(new Event("change")); await new Promise(r => setTimeout(r, 300)); const first = visibleTrails().slice(0, 3).map(t => t.name); s.value = "best"; s.dispatchEvent(new Event("change")); return { chip, has, first }; });
+await step("Popularity chip + sort", async () => { const r = await ev(async () => { const chip = /popular/.test(document.querySelector("#body")?.innerText || document.body.innerText);
+    const has = fOpts().sort.some(o => o[0] === "pop"); fToggle("sort", "pop"); render(); await new Promise(r => setTimeout(r, 300)); const first = visibleTrails().slice(0, 3).map(t => t.name); fToggle("sort", "best"); render(); return { chip, has, first }; });
   ck("Popularity chip + sort", r.chip && r.has, r); });
+await step("AllTrails-style filters (tags, rating, climb)", async () => { const r = await ev(async () => { const all = visibleTrails().length + atOnly().length;
+    fToggle("attr", "waterfall"); render(); const wf = atOnly().concat(visibleTrails()).length; const wfNames = visibleTrails().map(t => t.name).concat(atOnly().map(x => x.n)).slice(0, 4);
+    fToggle("attr", "waterfall"); fToggle("rating", 4.5); render(); const r45 = visibleTrails().every(t => (atFor(t)?.r || 0) >= 4.5);
+    fToggle("rating", 4.5); render(); const pills = document.querySelectorAll(".fpill").length; return { all, wf, wfNames, r45, pills, back: visibleTrails().length + atOnly().length }; });
+  ck("AllTrails-style filters (tags, rating, climb)", r.pills >= 8 && r.wf > 0 && r.wf < r.all && r.r45 && r.back === r.all, r); });
 await step("AllTrails trails drawn on map", async () => ck("AllTrails trails drawn on map", await ev(() => visibleTrails().filter(t => t.atId && t.id.startsWith("at") && t._line && map.hasLayer(t._line)).length > 0)));
 
 // Map button
@@ -79,7 +88,9 @@ await step("Details page content", async () => { await ev(id => previewTrail(id)
 await step("Trail conditions links", async () => { await pg.waitForFunction(() => !/Finding who manages/.test(document.querySelector("#panel").innerText), null, { timeout: 60000 }).catch(() => {});
   const r = await ev(() => [...document.querySelectorAll(".condlinks a")].map(a => a.textContent.trim() + " " + a.href.slice(0, 60)));
   ck("Trail conditions links", r.some(x => /wta\.org/.test(x)) && r.some(x => /Alerts and closures/.test(x)), r); });
-await step("Save trail from details", async () => { await ev(() => { const c = document.querySelector("[data-list]"); c.checked = true; c.dispatchEvent(new Event("change", { bubbles: true })); }); await W(500); ck("Save trail from details", await ev(id => !!S.saved[id], mtsi)); });
+await step("Save trail from details", async () => { await pg.click("#saveBtn"); await W(400); await ev(() => { const c = document.querySelector("#ldLists [data-ld]"); c.checked = true; c.dispatchEvent(new Event("change", { bubbles: true })); document.querySelector("#listDlg").close(); }); await W(500);
+  const r = await ev(id => ({ saved: !!S.saved[id], acts: [...document.querySelectorAll(".acts .act")].map(x => x.textContent.trim()), desc: document.querySelector(".desc")?.textContent.slice(0, 80), tags: document.querySelectorAll(".tagc").length, near: document.querySelectorAll(".ncard").length }), mtsi);
+  ck("Save trail from details", r.saved, r); ck("Trail page like AllTrails (actions, description, tags, nearby)", r.acts.length === 5 && /Explore this/.test(r.desc || "") && r.tags > 0 && r.near > 0, r); });
 await step("Back from details returns to preview", async () => { await pg.click("#back"); await W(800); ck("Back from details returns to preview", await ev(() => !!R.pv), await ev(() => R.pv)); });
 await step("Details then Map button then pan loads trails", async () => { await ev(id => openTrail(id), mtsi); await W(800); await ev(() => mapFull(true)); await W(500); const n = await searches(); await ev(() => map.panBy([0, map.getSize().y * 3])); await W(2000); const cov = await ev(() => R.cov.some(c => bbHolds(c, queryBox()))); ck("Details then Map button then pan loads trails", (await searches()) > n || cov, { searches: (await searches()) - n, alreadyCovered: cov }); await pg.waitForFunction(() => !R.searching, null, { timeout: 150000 }).catch(() => {}); await ev(() => { closeTrail(); mapFull(false); }); });
 
@@ -98,7 +109,7 @@ await step("Map filters in Settings", async () => { await pg.click("#setBtn"); a
 
 // Offline + navigation
 await step("Offline download + navigate", async () => { await ev(id => openTrail(id), mtsi); await W(1500); const off = await ev(() => !!document.querySelector("#offBtn")); await pg.click("#navBtn"); await W(2500);
-  const nav = await ev(() => ({ nav: !!R.nav, ui: !document.querySelector("#nav")?.hidden })); await ev(() => stopNav()); await W(300); await ev(() => closeTrail());
+  const nav = await ev(() => ({ nav: !!R.nav, ui: !document.querySelector("#nav")?.hidden })); const rec = await ev(() => !!R.rec?.trail); await ev(() => { stopNav(true); endRec(); }); await W(300); ck("Navigate records the hike", rec); await ev(() => closeTrail());
   ck("Offline download + navigate", off && nav.nav, { off, nav }); });
 
 // Saved weather board
@@ -123,6 +134,19 @@ await step("Zoomed in on Maui still loads nearby trails", async () => { await ev
   ck("Maui has the full AllTrails list (100+)", mauiN >= 100, { mauiN }); });
 await step("Show nearby trails button", async () => { const has = await ev(() => !!document.querySelector("#showNear")); if (!has) { ck("Show nearby trails button", true, "trails already on screen"); return; }
   await pg.click("#showNear"); await W(1500); const r = await ev(() => ({ z: map.getZoom(), list: document.querySelectorAll(".card[data-id]").length })); ck("Show nearby trails button", r.list > 0, r); });
+await step("Bottom tabs, Profile and Navigate tabs", async () => { const r = await ev(async () => { const tabs = [...document.querySelectorAll(".tabs [data-tab]")].map(b => b.textContent.trim()); const bar = document.querySelector(".tabs").getBoundingClientRect();
+    setTab("profile"); await new Promise(r => setTimeout(r, 300)); const prof = /Your hiking/.test(document.querySelector("#body").innerText);
+    setTab("record"); await new Promise(r => setTimeout(r, 300)); const nav = /Navigate/.test(document.querySelector("#body").innerText); setTab("explore"); return { tabs, barBottom: Math.round(bar.bottom), h: innerHeight, prof, nav }; });
+  ck("Bottom tabs, Profile and Navigate tabs", r.tabs.length === 4 && r.barBottom >= r.h - 2 && r.prof && r.nav, r); });
+await step("Map layers (radar, wildfires, light pollution, air quality)", async () => {
+  const net = []; pg.on("response", x => { const u = x.url(); if (/rainviewer|arcgis.com\/T4Qm|gibs\.earthdata|air-quality-api/.test(u)) net.push(x.status() + " " + u.slice(0, 90)); });
+  await ev(() => { map.setView([39.5, -121.5], 7); }); await W(500); await ev(() => openLayers()); await W(500);
+  const btns = await ev(() => document.querySelectorAll("#layBase [data-base]").length);
+  for (const k of ["radar", "fire", "night"]) { await ev(k => setOvl(k, true), k); await W(4000); }
+  await ev(() => getAir([47.5, -121.7]).then(v => window._aq = v, e => window._aq = "err:" + e.message)); await W(3000);
+  const r = await ev(() => ({ ovl: Object.fromEntries(Object.entries(OVL).map(([k, o]) => [k, !!(o.l && map.hasLayer(o.l))])), radarAt: R.radarAt, fireN: R.fireN, fireErr: R.fireErr, aq: window._aq }));
+  for (const k of ["radar", "fire", "night"]) await ev(k => setOvl(k, false), k); await ev(() => document.querySelector("#layers").close());
+  ck("Map layers (radar, wildfires, light pollution, air quality)", btns === 4 && r.ovl.radar && r.ovl.fire && r.ovl.night && !r.fireErr && typeof r.aq === "number", { btns, ...r, net: net.slice(0, 12) }); });
 ck("No page errors", errs.length === 0, errs);
 await pg.screenshot({ path: "shots/audit.png" });
 console.log("\nSUMMARY"); for (const r of res) console.log(r[0], r[1]);
