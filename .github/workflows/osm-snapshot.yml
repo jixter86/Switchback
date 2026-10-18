@@ -1,0 +1,22 @@
+name: osm-snapshot
+# Refreshes the stored OpenStreetMap trails (osm/*.json) each week, or when run by hand.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 9 * * 1"
+permissions:
+  contents: write
+jobs:
+  snap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node tools/osmsnap.mjs
+      - name: Commit changes
+        run: |
+          git config user.name "jixter86"; git config user.email "jixter86@users.noreply.github.com"
+          git add osm
+          git diff --cached --quiet || (git commit -m "Refresh stored OpenStreetMap trails" && git push)
