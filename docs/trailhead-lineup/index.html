@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trailhead Lineup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Standalone trail board: a sticky day picker over a column of trailhead "signposts",
+   each pulling live weather (Open-Meteo) and real drive time (OSRM) direct from the device. */
+:root{
+  --bg:#eef0ea; --panel:#fbfcf8; --ink:#1f2b22; --muted:#5d6b60; --line:#d3d9cf;
+  --blaze:#c4561f; --blaze-soft:#f6e1d4; --good:#2f7a4a; --warn:#a46a00; --bad:#b23a2e; --rain:#2f6aa4;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#141a16; --panel:#1c241e; --ink:#e4ebe2; --muted:#9aa89c; --line:#2f3a32;
+  --blaze:#ec8550; --blaze-soft:#3a271c; --good:#6cc48c; --warn:#e2b04c; --bad:#ef7d70; --rain:#6fa8d6; color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.45 var(--body)}
+img{max-width:100%}
+.wrap{max-width:760px;margin:0 auto;padding-inline:16px;padding-block:18px 48px;display:flex;flex-direction:column;gap:14px}
+h1{font:700 2rem/1 var(--display);letter-spacing:.01em;margin:0;text-transform:uppercase}
+h1 span{color:var(--blaze)}
+.sub{color:var(--muted);margin:4px 0 0}
+label.lab{font:600 .72rem var(--body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+input[type=text]{flex:1 1 220px;min-width:0;font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--blaze);outline-offset:2px}
+button{font:600 .9rem var(--body);border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:9px 14px;cursor:pointer}
+button.primary{background:var(--blaze);border-color:var(--blaze);color:#fff}
+button:disabled{opacity:.55;cursor:default}
+button.link{border:none;background:none;color:var(--blaze);padding:0;font-size:.82rem}
+.controls{display:flex;flex-direction:column;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+.note{font-size:.85rem;color:var(--muted)}
+.err{font-size:.85rem;color:var(--bad)}
+.dayband{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:6px;display:flex;flex-direction:column;gap:6px}
+.days{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.days button{flex:0 0 auto;font:700 .95rem var(--display);letter-spacing:.04em;text-transform:uppercase;padding:6px 12px}
+.days button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.sort{font-size:.85rem;color:var(--muted)}
+.sort button{padding:4px 10px;font-size:.8rem}
+.sort button[aria-pressed=true]{border-color:var(--blaze);color:var(--blaze)}
+.list{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.top{display:flex;gap:10px;justify-content:space-between;align-items:flex-start}
+.top>div{min-width:0}
+.name{font:700 1.35rem/1.1 var(--display);margin:0;text-wrap:balance}
+.name a{color:inherit;text-decoration:none}
+.name a:hover{text-decoration:underline}
+.where{color:var(--muted);font-size:.85rem;word-break:break-word}
+.x{border:none;background:none;color:var(--muted);padding:4px 6px;font-size:1.1rem;line-height:1;cursor:pointer}
+.hero{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tile{border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-width:0}
+.tile .big{font:700 1.7rem/1 var(--display);font-variant-numeric:tabular-nums}
+.tile .big small{font:600 1rem var(--display);color:var(--muted)}
+.tile .cap{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.tile .meta{font-size:.8rem;color:var(--muted);margin-top:2px}
+.tile a{color:var(--blaze);font-size:.8rem;font-weight:600;text-decoration:none}
+.week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;font-variant-numeric:tabular-nums}
+.d{text-align:center;border-radius:8px;padding:5px 0;font-size:.78rem}
+.d .dn{font:700 .74rem var(--display);text-transform:uppercase;color:var(--muted)}
+.d .ic{font-size:1rem;line-height:1.1}
+.d .hi{font-weight:600}.d .lo{color:var(--muted)}
+.d .pp{color:var(--rain);font-size:.72rem}
+.d.sel{background:var(--blaze-soft)}
+.d.sel .dn{color:var(--blaze)}
+.empty{text-align:center;padding:28px 16px;border:1.5px dashed var(--line);border-radius:12px;color:var(--muted)}
+.empty strong{display:block;font:700 1.3rem var(--display);color:var(--ink);text-transform:uppercase;margin-bottom:4px}
+@media (prefers-reduced-motion:no-preference){.card{animation:in .25s ease-out}@keyframes in{from{transform:translateY(4px)}to{transform:none}}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Trailhead <span>Lineup</span></h1>
+    <p class="sub">Your shortlist of trails, with live weather and real driving time to each trailhead.</p>
+  </header>
+
+  <section class="controls" aria-label="Setup">
+    <label class="lab" for="home">Driving from</label>
+    <form class="row" id="homeForm">
+      <input type="text" id="home" placeholder="Address or coordinates, e.g. Bellevue WA or 47.61,-122.20" autocomplete="off">
+      <button id="homeBtn" type="submit">Set</button>
+    </form>
+    <label class="lab" for="tname">Add a trail</label>
+    <form id="addForm" style="display:flex;flex-direction:column;gap:8px">
+      <div class="row"><input type="text" id="tname" placeholder="Trail name, e.g. Mount Si" autocomplete="off"></div>
+      <div class="row">
+        <input type="text" id="tcoords" placeholder="Trailhead coordinates, e.g. 47.4878, -121.7233" autocomplete="off">
+        <button class="primary" id="addBtn" type="submit">Add</button>
+      </div>
+      <input type="text" id="turl" placeholder="AllTrails link (optional)" autocomplete="off">
+      <label class="lab" for="gpx" style="margin-top:2px">or import the trailhead from a GPX file</label>
+      <input type="file" id="gpx" accept=".gpx,application/gpx+xml,text/xml">
+    </form>
+    <label class="lab" for="share">Share your list</label>
+    <div class="row">
+      <button id="exportBtn" type="button">Make share code</button>
+      <button id="importBtn" type="button">Load share code</button>
+    </div>
+    <textarea id="share" rows="3" placeholder="Make a code here to copy it to another device, or paste one here and tap Load." style="font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;width:100%;resize:vertical"></textarea>
+    <div id="msg" class="note" role="status"></div>
+  </section>
+
+  <div class="dayband" id="dayband" hidden>
+    <div class="days" id="days" role="group" aria-label="Compare day"></div>
+    <div class="sort row">Sort by
+      <button data-sort="drive" aria-pressed="true" type="button">Nearest</button>
+      <button data-sort="warm" aria-pressed="false" type="button">Warmest</button>
+      <button data-sort="dry" aria-pressed="false" type="button">Driest</button>
+      <button data-sort="added" aria-pressed="false" type="button">Added</button>
+      <button id="refresh" style="margin-left:auto" type="button">Refresh</button>
+    </div>
+  </div>
+
+  <div class="list" id="list">
+    <div class="empty" id="empty"><strong>No trails yet</strong>Add a trail with the coordinates AllTrails shows you. Each one appears here with its 7-day forecast and the real driving time from your start point.</div>
+  </div>
+  <p class="note" id="foot">Weather from Open-Meteo, driving time and distance from the OSRM routing service, both free and live. Everything is saved on this device only.</p>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const WMO = {0:["☀","Clear"],1:["🌤","Mainly clear"],2:["⛅","Partly cloudy"],3:["☁","Overcast"],45:["🌫","Fog"],48:["🌫","Rime fog"],51:["🌦","Light drizzle"],53:["🌦","Drizzle"],55:["🌧","Heavy drizzle"],56:["🌧","Freezing drizzle"],57:["🌧","Freezing drizzle"],61:["🌦","Light rain"],63:["🌧","Rain"],65:["🌧","Heavy rain"],66:["🌧","Freezing rain"],67:["🌧","Freezing rain"],71:["🌨","Light snow"],73:["🌨","Snow"],75:["❄","Heavy snow"],77:["🌨","Snow grains"],80:["🌦","Light showers"],81:["🌧","Showers"],82:["⛈","Heavy showers"],85:["🌨","Snow showers"],86:["🌨","Snow showers"],95:["⛈","Thunderstorm"],96:["⛈","Thunderstorm, hail"],99:["⛈","Thunderstorm, hail"]};
+
+const state = { home: null, trails: [], day: 0, sort: "drive" };
+
+/* ---------- storage ---------- */
+function load(){
+  try { const s = JSON.parse(localStorage.getItem("trailhead-lineup") || "{}");
+    if (s.home) state.home = s.home;
+    if (Array.isArray(s.trails)) state.trails = s.trails;
+    if (s.sort) state.sort = s.sort;
+  } catch (e) {}
+}
+function save(){
+  try { localStorage.setItem("trailhead-lineup", JSON.stringify({ home: state.home, sort: state.sort,
+    trails: state.trails.map(t => ({ id:t.id, name:t.name, lat:t.lat, lng:t.lng, url:t.url, addedAt:t.addedAt })) })); } catch (e) {}
+}
+
+function msg(t, isErr){ const m = $("#msg"); m.textContent = t || ""; m.className = isErr ? "err" : "note"; }
+function parseCoords(s){
+  const m = String(s||"").match(/(-?\d{1,2}(?:\.\d+)?)\s*[, ]\s*(-?\d{1,3}(?:\.\d+)?)/);
+  if (!m) return null;
+  const lat=+m[1], lng=+m[2];
+  return (Math.abs(lat)<=90 && Math.abs(lng)<=180) ? {lat,lng} : null;
+}
+
+/* ---------- network ---------- */
+async function geocode(q){
+  const c = parseCoords(q);
+  if (c) return { lat:c.lat, lng:c.lng, label: c.lat.toFixed(4)+", "+c.lng.toFixed(4) };
+  const r = await fetch("https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&format=json&name="+encodeURIComponent(q));
+  if (!r.ok) throw new Error("geocode "+r.status);
+  const j = await r.json();
+  const h = j.results && j.results[0];
+  if (!h) throw new Error("no match");
+  return { lat:h.latitude, lng:h.longitude, label:[h.name,h.admin1,h.country_code].filter(Boolean).join(", ") };
+}
+async function getWeather(t){
+  const u = "https://api.open-meteo.com/v1/forecast?latitude="+t.lat+"&longitude="+t.lng+
+    "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max"+
+    "&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto&forecast_days=7";
+  const r = await fetch(u);
+  if (!r.ok) throw new Error("weather "+r.status);
+  const j = await r.json(); const d = j.daily;
+  if (!d || !d.time) throw new Error("no forecast");
+  return d.time.map((date,i) => ({ date,
+    code:d.weather_code[i], hi:Math.round(d.temperature_2m_max[i]), lo:Math.round(d.temperature_2m_min[i]),
+    pp:d.precipitation_probability_max[i], wind:Math.round(d.wind_speed_10m_max[i]) }));
+}
+async function getDrive(t){
+  if (!state.home) return null;
+  const u = "https://router.project-osrm.org/route/v1/driving/"+state.home.lng+","+state.home.lat+";"+t.lng+","+t.lat+"?overview=false";
+  const r = await fetch(u);
+  if (!r.ok) throw new Error("route "+r.status);
+  const j = await r.json();
+  if (j.code !== "Ok" || !j.routes || !j.routes[0]) throw new Error(j.code || "no route");
+  return { minutes: Math.round(j.routes[0].duration/60), miles: j.routes[0].distance/1609.34 };
+}
+
+async function hydrate(t, force){
+  if (!t._w || force) { t._wLoading=true; render();
+    try { t.forecast = await getWeather(t); t._wErr=null; } catch(e){ t._wErr="Weather unavailable"; }
+    t._w=true; t._wLoading=false; render(); }
+  if (state.home && (!t._dHome || t._dHome!==homeKey() || force)) { t._dLoading=true; render();
+    try { t.drive = await getDrive(t); t._dErr=null; } catch(e){ t._dErr="Route unavailable"; t.drive=null; }
+    t._dHome=homeKey(); t._dLoading=false; render(); }
+}
+function homeKey(){ return state.home ? state.home.lat.toFixed(4)+","+state.home.lng.toFixed(4) : ""; }
+function hydrateAll(force){ state.trails.forEach(t => hydrate(t, force)); }
+
+/* ---------- actions ---------- */
+$("#homeForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const v = $("#home").value.trim(); if (!v) return;
+  $("#homeBtn").disabled = true; msg("Finding your start point…");
+  try { state.home = await geocode(v); $("#home").value = state.home.label; msg("Starting from "+state.home.label+".");
+    state.trails.forEach(t => { t._dHome=null; }); save(); hydrateAll(); }
+  catch (err) { msg("Couldn't find “"+v+"”. Try a coordinate pair like 47.61, -122.20.", true); }
+  finally { $("#homeBtn").disabled = false; }
+});
+$("#addForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const name = $("#tname").value.trim();
+  const c = parseCoords($("#tcoords").value);
+  if (!name) { msg("Give the trail a name.", true); return; }
+  if (!c) { msg("Paste the trailhead coordinates, e.g. 47.4878, -121.7233.", true); return; }
+  const t = { id: "t"+Date.now()+Math.floor(Math.random()*1e3), name, lat:c.lat, lng:c.lng,
+    url: $("#turl").value.trim() || null, addedAt: Date.now() };
+  state.trails.push(t); save();
+  $("#tname").value=""; $("#tcoords").value=""; $("#turl").value=""; msg("Added "+name+".");
+  render(); hydrate(t);
+});
+/* Share codes: the whole list (start point + trails) as one URL-safe string. */
+function encodeList(){
+  const p = { h: state.home ? { label: state.home.label, lat: state.home.lat, lng: state.home.lng } : null,
+    t: state.trails.map(t => [t.name, +t.lat.toFixed(5), +t.lng.toFixed(5), t.url || ""]) };
+  return btoa(unescape(encodeURIComponent(JSON.stringify(p)))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
+function decodeList(code){
+  const s = code.trim().replace(/-/g,"+").replace(/_/g,"/");
+  const p = JSON.parse(decodeURIComponent(escape(atob(s + "===".slice((s.length + 3) % 4)))));
+  if (!p || !Array.isArray(p.t)) throw new Error("bad share code");
+  return p;
+}
+function importCode(){
+  let p;
+  try { p = decodeList($("#share").value); }
+  catch (e) { msg("That share code isn't valid. Copy the whole code again.", true); return; }
+  if (p.h) { state.home = { label: p.h.label, lat: p.h.lat, lng: p.h.lng }; $("#home").value = p.h.label; }
+  let added = 0;
+  p.t.forEach(([name, lat, lng, url]) => {
+    if (state.trails.some(x => x.name === name && x.lat === lat && x.lng === lng)) return;
+    state.trails.push({ id: "t" + Date.now() + "_" + added, name, lat, lng, url: url || null, addedAt: Date.now() + added });
+    added++;
+  });
+  save(); render(); hydrateAll();
+  msg("Loaded " + added + " new trail" + (added === 1 ? "" : "s") + " from the share code.");
+}
+$("#exportBtn").addEventListener("click", () => {
+  const c = encodeList(); $("#share").value = c; $("#share").select();
+  try { navigator.clipboard.writeText(c).then(() => msg("Share code copied. Paste it on another device and tap Load share code."), () => msg("Share code is ready below. Copy it and paste it on another device.")); }
+  catch (e) { msg("Share code is ready below. Copy it and paste it on another device."); }
+});
+$("#importBtn").addEventListener("click", importCode);
+
+$("#gpx").addEventListener("change", async e => {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  try {
+    const text = await f.text();
+    const doc = new DOMParser().parseFromString(text, "application/xml");
+    if (doc.querySelector("parsererror")) throw new Error("bad gpx");
+    const pt = doc.querySelector("wpt, trkpt, rtept");
+    if (!pt) throw new Error("no points");
+    const lat=+pt.getAttribute("lat"), lng=+pt.getAttribute("lon");
+    if (!(Math.abs(lat)<=90 && Math.abs(lng)<=180)) throw new Error("bad point");
+    const nmEl = doc.querySelector("trk > name, rte > name, metadata > name, wpt > name");
+    const nm = nmEl && nmEl.textContent.trim();
+    if (nm && !$("#tname").value.trim()) $("#tname").value = nm;
+    $("#tcoords").value = lat.toFixed(5)+", "+lng.toFixed(5);
+    msg("Read the trailhead ("+lat.toFixed(5)+", "+lng.toFixed(5)+") from the GPX. Check the name, then tap Add.");
+  } catch (err) { msg("Couldn't read coordinates from that GPX file.", true); }
+  finally { e.target.value=""; }
+});
+$("#refresh").addEventListener("click", () => hydrateAll(true));
+document.querySelectorAll("[data-sort]").forEach(b => b.addEventListener("click", () => { state.sort=b.dataset.sort; save(); render(); }));
+
+/* ---------- render ---------- */
+function fmtDrive(min){ if (min==null) return "—"; const h=Math.floor(min/60), m=min%60; return h? h+"h "+String(m).padStart(2,"0") : m+"m"; }
+function el(tag, cls, text){ const e=document.createElement(tag); if(cls)e.className=cls; if(text!=null)e.textContent=text; return e; }
+function dayNames(){
+  const any = state.trails.find(t => t.forecast);
+  const src = any ? any.forecast.map(f=>f.date) : Array.from({length:7},(_,i)=>new Date(Date.now()+i*864e5).toISOString().slice(0,10));
+  return src.map((d,i)=> i===0 ? "Today" : new Date(d+"T12:00").toLocaleDateString("en-US",{weekday:"short"}));
+}
+function renderDays(){
+  const box=$("#days"); box.replaceChildren();
+  dayNames().forEach((n,i)=>{ const b=el("button",null,n); b.type="button"; b.setAttribute("aria-pressed",String(i===state.day));
+    b.onclick=()=>{ state.day=i; render(); }; box.append(b); });
+  document.querySelectorAll("[data-sort]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.sort===state.sort)));
+}
+function sorted(){
+  const ts=state.trails.slice();
+  const f=(t)=> t.forecast && t.forecast[state.day];
+  const dr=t=> (t.drive && t.drive.minutes!=null)?t.drive.minutes:1e9;
+  if (state.sort==="drive") ts.sort((a,b)=>dr(a)-dr(b)||a.addedAt-b.addedAt);
+  else if (state.sort==="warm") ts.sort((a,b)=>((f(b)?f(b).hi:-999)-(f(a)?f(a).hi:-999)));
+  else if (state.sort==="dry") ts.sort((a,b)=>((f(a)?(f(a).pp??999):999)-(f(b)?(f(b).pp??999):999)));
+  else ts.sort((a,b)=>a.addedAt-b.addedAt);
+  return ts;
+}
+function card(t){
+  const c=el("article","card");
+  const top=el("div","top"), left=el("div");
+  const h=el("h2","name");
+  if (t.url){ const a=el("a",null,t.name); a.href=t.url; a.target="_blank"; a.rel="noopener"; h.append(a); } else h.textContent=t.name;
+  left.append(h, el("div","where", t.lat.toFixed(4)+", "+t.lng.toFixed(4)));
+  const x=el("button","x","✕"); x.type="button"; x.setAttribute("aria-label","Remove "+t.name);
+  x.onclick=()=>{ state.trails=state.trails.filter(z=>z.id!==t.id); save(); render(); };
+  top.append(left,x); c.append(top);
+
+  const fc=t.forecast && t.forecast[state.day];
+  const hero=el("div","hero");
+  const wt=el("div","tile");
+  const big=el("div","big");
+  if (fc){ big.append(fc.hi+"°", el("small",null," / "+fc.lo+"°")); }
+  else big.textContent = t._wErr ? "—" : "…";
+  wt.append(el("div","cap",(state.day===0?"Today":dayNames()[state.day])+" high / low"), big);
+  if (fc){ const wmo=WMO[fc.code]||["",""]; wt.append(el("div","meta",(wmo[0]+" "+wmo[1]).trim()+(fc.pp!=null?" · "+fc.pp+"% rain":"")+" · "+fc.wind+" mph wind")); }
+  else if (t._wErr) wt.append(el("div","meta",t._wErr));
+
+  const dt=el("div","tile");
+  const dbig=el("div","big", !state.home ? "—" : t.drive ? fmtDrive(t.drive.minutes) : (t._dLoading?"…": (t._dErr?"—":"…")));
+  if (state.home && t.drive && t.drive.miles!=null) dbig.append(el("small",null," "+Math.round(t.drive.miles)+" mi"));
+  dt.append(el("div","cap", state.home?"Drive":"Set a start point"), dbig);
+  if (t._dErr && state.home) dt.append(el("div","meta",t._dErr));
+  const dl=el("a",null,"Open in Maps ↗");
+  dl.href="https://www.google.com/maps/dir/?api=1"+(state.home?"&origin="+state.home.lat+","+state.home.lng:"")+"&destination="+t.lat+","+t.lng+"&travelmode=driving";
+  dl.target="_blank"; dl.rel="noopener"; dt.append(dl);
+  hero.append(wt,dt); c.append(hero);
+
+  if (t.forecast){
+    const wk=el("div","week");
+    t.forecast.slice(0,7).forEach((f,i)=>{ const b=el("div","d"+(i===state.day?" sel":""));
+      const wmo=WMO[f.code]||["",""];
+      b.append(el("div","dn", i===0?"Tdy":new Date(f.date+"T12:00").toLocaleDateString("en-US",{weekday:"short"}).slice(0,3)),
+        el("div","ic",wmo[0]), el("div","hi",f.hi+"°"), el("div","lo",f.lo+"°"),
+        el("div","pp", (f.pp!=null&&f.pp>=20)?f.pp+"%":""));
+      wk.append(b); });
+    c.append(wk);
+  } else if (t._wErr) c.append(el("div","err",t._wErr+". Tap Refresh to retry."));
+  return c;
+}
+function render(){
+  const has=state.trails.length>0;
+  $("#dayband").hidden=!has; $("#empty").hidden=has;
+  $("#list").querySelectorAll(".card").forEach(n=>n.remove());
+  if (has){ renderDays(); for (const t of sorted()) $("#list").append(card(t)); }
+}
+
+/* ---------- boot ---------- */
+load();
+if (state.home && $("#home")) $("#home").value = state.home.label;
+render();
+hydrateAll();
+/* A copy made for sharing carries its list in BAKED_CODE; it loads on first open, if this device has no list yet. */
+const BAKED_CODE = "";
+if (BAKED_CODE && state.trails.length === 0) { $("#share").value = BAKED_CODE; importCode(); }
+/* A link like .../index.html#list=CODE opens with that list loaded. */
+const linked = location.hash.match(/^#list=([A-Za-z0-9_-]+)$/);
+if (linked) { $("#share").value = linked[1]; importCode(); history.replaceState(null, "", location.pathname); }
+</script>
+</body>
+</html>
